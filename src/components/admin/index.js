@@ -7,6 +7,7 @@ import { renderAddSubjectView } from './AddSubjectView.js';
 import { renderAddSectionView } from './AddSectionView.js';
 import { renderAssignClassView } from './AssignClassView.js';
 import { AdminService } from '../../services/adminService.js';
+import { getLocalDateString } from '../../utils/dateUtils.js';
 
 /**
  * Master Admin Dashboard Coordinator (Live Supabase Connected)
@@ -29,7 +30,7 @@ export class AdminDashboardApp {
       <div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: var(--font-sans); color: var(--text-muted);">
         <div style="text-align: center;">
           <div style="width: 40px; height: 40px; border: 3px solid #E0E7FF; border-top-color: #4F46E5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px;"></div>
-          <p style="font-weight: 600; color: #1E293B;">Connecting to Supabase Database...</p>
+          <p style="font-weight: 600; color: #1E293B;">Loading Admin Portal...</p>
         </div>
       </div>
       <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
@@ -271,7 +272,7 @@ export class AdminDashboardApp {
 
         try {
           await AdminService.addStudent(data);
-          alert(`Student "${data.name}" enrolled successfully in Supabase!`);
+          alert(`Student "${data.name}" enrolled successfully!`);
           await this.refreshData();
           await this.render();
         } catch (err) {
@@ -350,25 +351,407 @@ export class AdminDashboardApp {
       });
     }
 
-    // 6. Assign Lecture Form
+    // 6. Assign Lecture Form with Multi-Slot Weekly Scheduler
     const assignForm = this.container.querySelector('#form-assign-class');
     if (assignForm) {
+      const slotsContainer = assignForm.querySelector('#lecture-slots-container');
+      const addSlotBtn = assignForm.querySelector('#btn-add-slot');
+      const clearSlotsBtn = assignForm.querySelector('#btn-clear-slots');
+      const presetWeekdaysBtn = assignForm.querySelector('#btn-preset-weekdays');
+      const submitBtnText = assignForm.querySelector('#btn-submit-assignment-text');
+
+      const fullDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      let slotCounter = 1;
+
+      const formatYMD = (d) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      const getNextDayYMD = (dateStr) => {
+        const d = new Date(dateStr + 'T00:00:00');
+        d.setDate(d.getDate() + 1);
+        return formatYMD(d);
+      };
+
+      let slots = [
+        {
+          id: slotCounter++,
+          lecDate: getLocalDateString(),
+          startTime: '10:00:00',
+          endTime: '11:00:00',
+          roomNo: 'Room 101'
+        }
+      ];
+
+      const renderSlots = () => {
+        if (!slotsContainer) return;
+
+        slotsContainer.innerHTML = slots.map((slot, index) => {
+          const d = new Date(slot.lecDate + 'T00:00:00');
+          const dayName = isNaN(d.getDay()) ? 'Scheduled Day' : fullDays[d.getDay()];
+
+          return `
+            <div class="lecture-slot-card" data-slot-id="${slot.id}" style="display: grid; grid-template-columns: 2fr 1.2fr 1.2fr 1.4fr auto; gap: 12px; align-items: end; background: #FFFFFF; border: 1.5px solid #E2E8F0; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); transition: border-color 0.15s;">
+              <!-- Slot Date & Day Detection -->
+              <div class="admin-form-group" style="margin-bottom: 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <label style="font-size: 0.8rem; font-weight: 700; color: #334155; margin-bottom: 0;">Slot #${index + 1} Date *</label>
+                  <span class="slot-day-badge" style="font-size: 0.72rem; font-weight: 800; background: #EEF2FF; color: #4338CA; padding: 2px 8px; border-radius: 6px;">${dayName}</span>
+                </div>
+                <input type="date" class="admin-input slot-input-date" value="${slot.lecDate}" required style="font-weight: 600; padding: 9px 12px; font-size: 0.88rem;">
+              </div>
+
+              <!-- Start Time -->
+              <div class="admin-form-group" style="margin-bottom: 0;">
+                <label style="font-size: 0.8rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Start Time *</label>
+                <input type="time" class="admin-input slot-input-start" value="${slot.startTime}" required step="1" style="font-weight: 600; padding: 9px 10px; font-size: 0.88rem;">
+              </div>
+
+              <!-- End Time -->
+              <div class="admin-form-group" style="margin-bottom: 0;">
+                <label style="font-size: 0.8rem; font-weight: 700; color: #334155; margin-bottom: 4px;">End Time *</label>
+                <input type="time" class="admin-input slot-input-end" value="${slot.endTime}" required step="1" style="font-weight: 600; padding: 9px 10px; font-size: 0.88rem;">
+              </div>
+
+              <!-- Room / Lab Number -->
+              <div class="admin-form-group" style="margin-bottom: 0;">
+                <label style="font-size: 0.8rem; font-weight: 700; color: #334155; margin-bottom: 4px;">Room / Lab *</label>
+                <input type="text" class="admin-input slot-input-room" value="${slot.roomNo}" required placeholder="Room 101" style="font-weight: 600; padding: 9px 12px; font-size: 0.88rem;">
+              </div>
+
+              <!-- Action Buttons (Duplicate & Delete) -->
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <button type="button" class="btn-duplicate-slot" data-slot-id="${slot.id}" style="padding: 8px 12px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; background: #EEF2FF; color: #4338CA; border: 1px solid #C7D2FE; cursor: pointer; white-space: nowrap;" title="Duplicate this slot">
+                  + Copy
+                </button>
+                <button type="button" class="btn-remove-slot" data-slot-id="${slot.id}" ${slots.length <= 1 ? 'disabled style="opacity:0.3; cursor:not-allowed;"' : 'style="cursor:pointer;"'} style="padding: 8px 10px; font-size: 0.8rem; font-weight: 700; border-radius: 8px; background: #FFF1F2; color: #E11D48; border: 1px solid #FECDD3;" title="Delete this slot">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        const count = slots.length;
+        if (submitBtnText) submitBtnText.textContent = `Save ${count} Lecture Assignment${count > 1 ? 's' : ''} in Database`;
+
+        // Attach input sync event listeners
+        slotsContainer.querySelectorAll('.lecture-slot-card').forEach(card => {
+          const slotId = parseInt(card.getAttribute('data-slot-id'), 10);
+          const slotObj = slots.find(s => s.id === slotId);
+          if (!slotObj) return;
+
+          const dateInput = card.querySelector('.slot-input-date');
+          const startInput = card.querySelector('.slot-input-start');
+          const endInput = card.querySelector('.slot-input-end');
+          const roomInput = card.querySelector('.slot-input-room');
+          const dayBadge = card.querySelector('.slot-day-badge');
+
+          dateInput?.addEventListener('change', (e) => {
+            slotObj.lecDate = e.target.value;
+            const d = new Date(slotObj.lecDate + 'T00:00:00');
+            if (dayBadge) dayBadge.textContent = isNaN(d.getDay()) ? 'Scheduled Day' : fullDays[d.getDay()];
+          });
+
+          startInput?.addEventListener('change', (e) => {
+            slotObj.startTime = e.target.value;
+          });
+
+          endInput?.addEventListener('change', (e) => {
+            slotObj.endTime = e.target.value;
+          });
+
+          roomInput?.addEventListener('input', (e) => {
+            slotObj.roomNo = e.target.value;
+          });
+        });
+
+        // Attach Duplicate Slot listeners
+        slotsContainer.querySelectorAll('.btn-duplicate-slot').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const slotId = parseInt(btn.getAttribute('data-slot-id'), 10);
+            const sourceSlot = slots.find(s => s.id === slotId);
+            if (sourceSlot) {
+              const newSlot = {
+                id: slotCounter++,
+                lecDate: sourceSlot.lecDate,
+                startTime: sourceSlot.startTime,
+                endTime: sourceSlot.endTime,
+                roomNo: sourceSlot.roomNo
+              };
+              const insertIdx = slots.findIndex(s => s.id === slotId);
+              slots.splice(insertIdx + 1, 0, newSlot);
+              renderSlots();
+            }
+          });
+        });
+
+        // Attach Remove Slot listeners
+        slotsContainer.querySelectorAll('.btn-remove-slot').forEach(btn => {
+          btn.addEventListener('click', () => {
+            if (slots.length <= 1) return;
+            const slotId = parseInt(btn.getAttribute('data-slot-id'), 10);
+            slots = slots.filter(s => s.id !== slotId);
+            renderSlots();
+          });
+        });
+      };
+
+      renderSlots();
+
+      // + Add Another Slot button (duplicates last slot with next day date)
+      if (addSlotBtn) {
+        addSlotBtn.addEventListener('click', () => {
+          const lastSlot = slots[slots.length - 1];
+          const newDate = lastSlot ? getNextDayYMD(lastSlot.lecDate) : getLocalDateString();
+          slots.push({
+            id: slotCounter++,
+            lecDate: newDate,
+            startTime: lastSlot ? lastSlot.startTime : '10:00:00',
+            endTime: lastSlot ? lastSlot.endTime : '11:00:00',
+            roomNo: lastSlot ? lastSlot.roomNo : 'Room 101'
+          });
+          renderSlots();
+        });
+      }
+
+      // Clear / Reset Slots button
+      if (clearSlotsBtn) {
+        clearSlotsBtn.addEventListener('click', () => {
+          slots = [
+            {
+              id: slotCounter++,
+              lecDate: getLocalDateString(),
+              startTime: '10:00:00',
+              endTime: '11:00:00',
+              roomNo: 'Room 101'
+            }
+          ];
+          renderSlots();
+        });
+      }
+
+      // Fill Mon-Fri Weekdays Preset
+      if (presetWeekdaysBtn) {
+        presetWeekdaysBtn.addEventListener('click', () => {
+          const now = new Date();
+          // Find next or current Monday
+          let cur = new Date(now);
+          while (cur.getDay() !== 1) { // 1 = Monday
+            cur.setDate(cur.getDate() + 1);
+          }
+
+          const defaultRoom = slots[0]?.roomNo || 'Room 101';
+          const newSlots = [];
+          for (let i = 0; i < 5; i++) {
+            newSlots.push({
+              id: slotCounter++,
+              lecDate: formatYMD(cur),
+              startTime: '10:00:00',
+              endTime: '11:00:00',
+              roomNo: defaultRoom
+            });
+            cur.setDate(cur.getDate() + 1);
+          }
+          slots = newSlots;
+          renderSlots();
+        });
+      }
+
+      // Form Submit (Batch Create)
       assignForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (slots.length === 0) {
+          alert('Please configure at least 1 lecture slot.');
+          return;
+        }
+
         const submitBtn = assignForm.querySelector('#btn-submit-assignment');
-        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving Lecture Assignment...'; }
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Saving Lecture Assignments...'; }
 
         const formData = new FormData(assignForm);
         const data = Object.fromEntries(formData.entries());
 
         try {
-          await AdminService.assignFaculty(data);
-          alert(`Lecture assigned to faculty in database successfully!`);
+          const res = await AdminService.assignFaculty({
+            ...data,
+            slots: slots
+          });
+          const countCreated = res?.length || slots.length;
+          alert(`Success! Scheduled ${countCreated} lecture assignment(s) for the faculty in database!`);
           await this.refreshData();
           await this.render();
         } catch (err) {
-          alert(`Failed to assign lecture: ${err.message || err.details || 'Database error'}`);
-          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Save Lecture Assignment in Database'; }
+          alert(`Failed to assign lectures: ${err.message || err.details || 'Database error'}`);
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Save Lecture Assignments in Database'; }
+        }
+      });
+    }
+
+    // 7. Edit & Delete Existing Lecture Assignments
+    const editModal = this.container.querySelector('#modal-edit-assignment');
+    const editForm = this.container.querySelector('#form-edit-assignment');
+    const closeEditModalBtn = this.container.querySelector('#btn-close-edit-modal');
+    const cancelEditBtn = this.container.querySelector('#btn-cancel-edit-assignment');
+    const editLecDateInput = this.container.querySelector('#edit-lec-date');
+    const editDayBadge = this.container.querySelector('#edit-slot-day-badge');
+    const fullDaysArr = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    const closeEditModal = () => {
+      if (editModal) {
+        editModal.style.display = 'none';
+        editModal.classList.remove('active');
+      }
+    };
+
+    if (closeEditModalBtn) closeEditModalBtn.addEventListener('click', closeEditModal);
+    if (cancelEditBtn) cancelEditBtn.addEventListener('click', closeEditModal);
+    if (editModal) {
+      editModal.addEventListener('click', (e) => {
+        if (e.target === editModal) closeEditModal();
+      });
+    }
+
+    // Date change listener in edit modal
+    if (editLecDateInput && editDayBadge) {
+      editLecDateInput.addEventListener('change', (e) => {
+        const d = new Date(e.target.value + 'T00:00:00');
+        editDayBadge.textContent = isNaN(d.getDay()) ? 'Day' : fullDaysArr[d.getDay()];
+      });
+    }
+
+    // Attach Edit button click handlers
+    this.container.querySelectorAll('.btn-edit-assignment').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const assignmentId = btn.getAttribute('data-id');
+        const a = this.assignments.find(item => item.id === assignmentId);
+        if (!a || !editModal) return;
+
+        const subjectName = a.section_subject?.subject?.subject_name || a.subjectName || 'Course';
+        const subjectCode = a.section_subject?.subject?.subject_code || a.subjectCode || '';
+        const sectionName = a.section_subject?.section?.section_name || a.sectionName || 'Class';
+        const lecId = a.lec_id || `LEC-${(a.id || '').slice(0, 6).toUpperCase()}`;
+
+        // Populate modal fields
+        const idInput = editModal.querySelector('#edit-assignment-id');
+        const subtitle = editModal.querySelector('#edit-assignment-subtitle');
+        const classSubjectText = editModal.querySelector('#edit-class-subject-text');
+        const facultySelect = editModal.querySelector('#edit-faculty-select');
+        const startTimeInput = editModal.querySelector('#edit-start-time');
+        const endTimeInput = editModal.querySelector('#edit-end-time');
+        const roomNoInput = editModal.querySelector('#edit-room-no');
+
+        if (idInput) idInput.value = a.id;
+        if (subtitle) subtitle.textContent = `Lecture ID: ${lecId}`;
+        if (classSubjectText) classSubjectText.textContent = `Section ${sectionName} • ${subjectName} (${subjectCode})`;
+        if (facultySelect) facultySelect.value = a.faculty?.id || a.faculty_id || '';
+        if (editLecDateInput) {
+          editLecDateInput.value = a.lec_date || getLocalDateString();
+          const d = new Date(editLecDateInput.value + 'T00:00:00');
+          if (editDayBadge) editDayBadge.textContent = isNaN(d.getDay()) ? (a.day_of_week || 'Day') : fullDaysArr[d.getDay()];
+        }
+        if (startTimeInput) startTimeInput.value = a.start_time || '10:00:00';
+        if (endTimeInput) endTimeInput.value = a.end_time || '11:00:00';
+        if (roomNoInput) roomNoInput.value = a.room_no || 'Room 101';
+
+        editModal.style.display = 'flex';
+        editModal.classList.add('active');
+      });
+    });
+
+    // Edit Form Submit Handler
+    if (editForm) {
+      editForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = editForm.querySelector('#btn-submit-edit-assignment');
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Updating...'; }
+
+        const formData = new FormData(editForm);
+        const data = Object.fromEntries(formData.entries());
+        const assignmentId = data.assignmentId;
+
+        try {
+          await AdminService.updateAssignment(assignmentId, {
+            facultyId: data.facultyId,
+            lecDate: data.lecDate,
+            startTime: data.startTime,
+            endTime: data.endTime,
+            roomNo: data.roomNo
+          });
+
+          alert('Lecture assignment updated successfully!');
+          closeEditModal();
+          await this.refreshData();
+          await this.render();
+        } catch (err) {
+          alert(`Failed to update assignment: ${err.message || 'Database error'}`);
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update Assignment'; }
+        }
+      });
+    }
+
+    // Attach Delete Confirmation Modal handlers
+    const deleteModal = this.container.querySelector('#modal-delete-assignment');
+    const deleteMsg = this.container.querySelector('#delete-assignment-message');
+    const deleteIdInput = this.container.querySelector('#delete-assignment-id');
+    const cancelDeleteBtn = this.container.querySelector('#btn-cancel-delete-modal');
+    const confirmDeleteBtn = this.container.querySelector('#btn-confirm-delete-assignment');
+
+    const closeDeleteModal = () => {
+      if (deleteModal) {
+        deleteModal.style.display = 'none';
+        deleteModal.classList.remove('active');
+      }
+    };
+
+    if (cancelDeleteBtn) cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+    if (deleteModal) {
+      deleteModal.addEventListener('click', (e) => {
+        if (e.target === deleteModal) closeDeleteModal();
+      });
+    }
+
+    this.container.querySelectorAll('.btn-delete-assignment').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const assignmentId = btn.getAttribute('data-id');
+        const a = this.assignments.find(item => item.id === assignmentId);
+        if (!a || !deleteModal) return;
+
+        const lecId = a.lec_id || `LEC-${(a.id || '').slice(0, 6).toUpperCase()}`;
+        const subjectName = a.section_subject?.subject?.subject_name || a.subjectName || 'this subject';
+        const sectionName = a.section_subject?.section?.section_name || a.sectionName || '';
+
+        if (deleteIdInput) deleteIdInput.value = a.id;
+        if (deleteMsg) {
+          deleteMsg.innerHTML = `Are you sure you want to delete assignment <strong>${lecId}</strong> for <strong>${subjectName}</strong> (Sec ${sectionName}) on <strong>${a.lec_date || ''}</strong>?<br><span style="color:#DC2626; font-size:0.82rem; margin-top:4px; display:inline-block;">This action cannot be undone.</span>`;
+        }
+
+        deleteModal.style.display = 'flex';
+        deleteModal.classList.add('active');
+      });
+    });
+
+    if (confirmDeleteBtn) {
+      confirmDeleteBtn.addEventListener('click', async () => {
+        const assignmentId = deleteIdInput ? deleteIdInput.value : null;
+        if (!assignmentId) return;
+
+        confirmDeleteBtn.disabled = true;
+        confirmDeleteBtn.textContent = 'Deleting...';
+
+        try {
+          await AdminService.deleteAssignment(assignmentId);
+          closeDeleteModal();
+          alert('Lecture assignment deleted successfully.');
+          await this.refreshData();
+          await this.render();
+        } catch (err) {
+          alert(`Failed to delete assignment: ${err.message || 'Database error'}`);
+          confirmDeleteBtn.disabled = false;
+          confirmDeleteBtn.textContent = 'Yes, Delete Assignment';
         }
       });
     }

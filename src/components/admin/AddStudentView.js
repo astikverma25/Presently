@@ -80,7 +80,7 @@ export const renderAddStudentView = (students = [], sections = []) => {
             Student Management
             <span class="badge-tag" id="badge-total-students" style="font-size: 0.82rem; padding: 4px 10px; border-radius: 9999px;">${students.length} Enrolled</span>
           </h2>
-          <p>Institutional student records from Supabase database</p>
+          <p>Institutional student records & enrollment</p>
         </div>
 
         <button type="button" id="btn-toggle-student-form" class="btn-open-form">
@@ -180,7 +180,7 @@ export const renderAddStudentView = (students = [], sections = []) => {
         <div class="admin-card-header" style="margin-bottom: 0; border-bottom: none; padding-bottom: 0;">
           <div>
             <h3>Enrolled Students Roster (<span id="visible-students-count">0</span>)</h3>
-            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 4px;">Live records from Supabase <code>students</code> table</p>
+            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 4px;">All enrolled students across departments</p>
           </div>
         </div>
 

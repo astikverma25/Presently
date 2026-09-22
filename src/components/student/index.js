@@ -21,10 +21,25 @@ export class StudentDashboardApp {
   }
 
   async init() {
-    this.profile = await StudentService.getProfile();
-    this.currentLecture = await StudentService.getCurrentLecture(this.profile?.sectionId, this.profile?.sectionName);
-    this.historyList = await StudentService.getAttendanceHistory(this.profile?.id);
-    await this.render();
+    this.container.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: var(--font-sans); color: var(--text-muted);">
+        <div style="text-align: center;">
+          <div style="width: 40px; height: 40px; border: 3px solid #E0E7FF; border-top-color: #4F46E5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px;"></div>
+          <p style="font-weight: 600; color: #1E293B;">Loading Student Portal...</p>
+        </div>
+      </div>
+      <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+    `;
+
+    try {
+      this.profile = await StudentService.getProfile();
+      this.currentLecture = await StudentService.getCurrentLecture(this.profile?.sectionId, this.profile?.sectionName);
+      this.historyList = await StudentService.getAttendanceHistory(this.profile?.id);
+    } catch (err) {
+      console.error('Student Portal load error:', err);
+    } finally {
+      await this.render();
+    }
   }
 
   async render() {

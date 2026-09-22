@@ -83,7 +83,7 @@ export const renderAddSectionView = (sectionsList = []) => {
         <div class="admin-card-header">
           <div>
             <h3>Active Classrooms & Sections (${sectionsList.length})</h3>
-            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 4px;">Live records from Supabase <code>sections</code> table</p>
+            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 4px;">All registered batches and sections</p>
           </div>
         </div>
 

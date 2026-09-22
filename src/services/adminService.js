@@ -322,35 +322,119 @@ export class AdminService {
       sectionSubjectId = newSS.id;
     }
 
-    // 2. Generate clean readable Lecture ID (Source of Truth)
-    const lecDate = assignmentData.lecDate || getLocalDateString();
-    const dateCode = lecDate.replace(/-/g, '');
-    const randSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
-    const lecId = (assignmentData.lecId || '').trim() || `LEC-${dateCode}-${randSuffix}`;
+    // 2. Resolve slots list (Individual date, start_time, end_time, room_no per lecture)
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const getDayName = (dateStr) => {
+      const d = new Date(dateStr + 'T00:00:00');
+      return isNaN(d.getDay()) ? (assignmentData.dayOfWeek || 'Monday') : days[d.getDay()];
+    };
 
-    // 3. Insert into faculty_assignment with unique lec_id and lec_date
+    let slots = [];
+    if (Array.isArray(assignmentData.slots) && assignmentData.slots.length > 0) {
+      slots = assignmentData.slots;
+    } else if (Array.isArray(assignmentData.dates) && assignmentData.dates.length > 0) {
+      slots = assignmentData.dates.map(dStr => ({
+        lecDate: dStr,
+        startTime: assignmentData.startTime || '10:00:00',
+        endTime: assignmentData.endTime || '11:00:00',
+        roomNo: assignmentData.roomNo || 'Room 101'
+      }));
+    } else {
+      slots = [
+        {
+          lecDate: assignmentData.lecDate || getLocalDateString(),
+          startTime: assignmentData.startTime || '10:00:00',
+          endTime: assignmentData.endTime || '11:00:00',
+          roomNo: assignmentData.roomNo || 'Room 101'
+        }
+      ];
+    }
+
+    // 3. Build rows for batch insert
+    const rows = slots.map(slot => {
+      const dateStr = slot.lecDate || getLocalDateString();
+      const dateCode = dateStr.replace(/-/g, '');
+      const randSuffix = Math.random().toString(36).substring(2, 7).toUpperCase();
+      const lecId = `LEC-${dateCode}-${randSuffix}`;
+      const dayOfWeek = getDayName(dateStr);
+
+      return {
+        section_subject_id: sectionSubjectId,
+        faculty_id: assignmentData.facultyId,
+        lec_id: lecId,
+        lec_date: dateStr,
+        status: 'scheduled',
+        day_of_week: dayOfWeek,
+        start_time: slot.startTime || '10:00:00',
+        end_time: slot.endTime || '11:00:00',
+        room_no: (slot.roomNo || assignmentData.roomNo || 'Room 101').trim()
+      };
+    });
+
+    // 4. Insert into faculty_assignment table
     const { data, error } = await supabase
       .from('faculty_assignment')
-      .insert([
-        {
-          section_subject_id: sectionSubjectId,
-          faculty_id: assignmentData.facultyId,
-          lec_id: lecId,
-          lec_date: lecDate,
-          status: 'scheduled',
-          day_of_week: assignmentData.dayOfWeek || 'Monday',
-          start_time: assignmentData.startTime || '10:00:00',
-          end_time: assignmentData.endTime || '11:00:00',
-          room_no: assignmentData.roomNo || 'Room 101'
-        }
-      ])
-      .select()
-      .single();
+      .insert(rows)
+      .select();
 
     if (error) {
-      console.error('Error creating faculty assignment:', error);
+      console.error('Error creating faculty assignments:', error);
       throw error;
     }
     return data;
   }
+
+  static async updateAssignment(id, updateData) {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const getDayName = (dateStr) => {
+      const d = new Date(dateStr + 'T00:00:00');
+      return isNaN(d.getDay()) ? (updateData.dayOfWeek || 'Monday') : days[d.getDay()];
+    };
+
+    const payload = {
+      start_time: updateData.startTime,
+      end_time: updateData.endTime,
+      room_no: (updateData.roomNo || 'Room 101').trim()
+    };
+
+    if (updateData.facultyId) {
+      payload.faculty_id = updateData.facultyId;
+    }
+
+    if (updateData.lecDate) {
+      payload.lec_date = updateData.lecDate;
+      payload.day_of_week = getDayName(updateData.lecDate);
+    }
+
+    if (updateData.status) {
+      payload.status = updateData.status;
+    }
+
+    const { data, error } = await supabase
+      .from('faculty_assignment')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating assignment:', error);
+      throw error;
+    }
+    return data;
+  }
+
+  static async deleteAssignment(id) {
+    const { error } = await supabase
+      .from('faculty_assignment')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting assignment:', error);
+      throw error;
+    }
+    return true;
+  }
 }
+

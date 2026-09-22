@@ -7,34 +7,35 @@ export const initDemoModal = () => {
       <div class="modal-content">
         <button class="modal-close" id="close-demo-modal">&times;</button>
         <div style="text-align: center; margin-bottom: 24px;">
-          <h3 style="font-size: 1.6rem; color: #0F172A; margin-bottom: 8px;">Book a Live Demo</h3>
-          <p style="font-size: 0.92rem; color: #64748B;">Experience Presently customized for your institution</p>
+          <h3 style="font-size: 1.6rem; color: #0F172A; margin-bottom: 8px;">Book an Institutional Demo</h3>
+          <p style="font-size: 0.92rem; color: #64748B;">Experience Presently customized for your college, school, or university</p>
         </div>
 
         <form id="demo-form" style="display: flex; flex-direction: column; gap: 14px;">
           <div>
-            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #334155;">Full Name</label>
-            <input type="text" required placeholder="Dr. Sarah Jenkins" style="width: 100%; padding: 11px 14px; border: 1px solid #CBD5E1; border-radius: 10px; font-size: 0.92rem;">
+            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #334155;">Full Name / Designation</label>
+            <input type="text" required placeholder="e.g. Prof. Rajesh Sharma / Dr. Pooja Verma" style="width: 100%; padding: 11px 14px; border: 1px solid #CBD5E1; border-radius: 10px; font-size: 0.92rem;">
           </div>
           <div>
-            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #334155;">Institution Name</label>
-            <input type="text" required placeholder="Apex University / High School" style="width: 100%; padding: 11px 14px; border: 1px solid #CBD5E1; border-radius: 10px; font-size: 0.92rem;">
+            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #334155;">College / School / Institute Name</label>
+            <input type="text" required placeholder="e.g. LIET / IIT Delhi / Delhi University / DPS" style="width: 100%; padding: 11px 14px; border: 1px solid #CBD5E1; border-radius: 10px; font-size: 0.92rem;">
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div>
-              <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #334155;">Work Email</label>
-              <input type="email" required placeholder="sarah@apex.edu" style="width: 100%; padding: 11px 14px; border: 1px solid #CBD5E1; border-radius: 10px; font-size: 0.92rem;">
+              <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #334155;">Institutional Email</label>
+              <input type="email" required placeholder="rajesh.sharma@liet.in" style="width: 100%; padding: 11px 14px; border: 1px solid #CBD5E1; border-radius: 10px; font-size: 0.92rem;">
             </div>
             <div>
-              <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #334155;">Est. Students</label>
+              <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #334155;">Total Student Strength</label>
               <select style="width: 100%; padding: 11px 14px; border: 1px solid #CBD5E1; border-radius: 10px; font-size: 0.92rem; background: #fff;">
-                <option>100 - 500</option>
-                <option>500 - 2,000</option>
-                <option>2,000 - 10,000+</option>
+                <option>100 - 500 Students</option>
+                <option>500 - 2,000 Students</option>
+                <option>2,000 - 5,000 Students</option>
+                <option>5,000+ Students</option>
               </select>
             </div>
           </div>
-          <button type="submit" class="btn btn-gold" style="width: 100%; margin-top: 10px; border-radius: 12px;">Schedule 15-Min Walkthrough</button>
+          <button type="submit" class="btn btn-gold" style="width: 100%; margin-top: 10px; border-radius: 12px;">Schedule 15-Min Live Demo</button>
         </form>
       </div>
     </div>

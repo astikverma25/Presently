@@ -13,8 +13,7 @@ export const initTutorialModal = () => {
             <div style="width: 64px; height: 64px; border-radius: 50%; background: #4338CA; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto; box-shadow: 0 0 20px rgba(67, 56, 202, 0.6); cursor: pointer;">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="#FFFFFF"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             </div>
-            <h4 style="font-size: 1.1rem; margin-bottom: 4px;">Interactive Workflow Preview</h4>
-            <p style="font-size: 0.85rem; color: #94A3B8;">Faculty launches rolling QR code &bull; Students scan in 0.5s via mobile browser</p>
+            <h4 style="font-size: 1.1rem;">Interactive Workflow Preview</h4>
           </div>
         </div>
       </div>

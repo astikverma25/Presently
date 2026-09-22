@@ -28,7 +28,7 @@ export const renderAddFacultyView = (facultyList = []) => {
         <div class="admin-card-header">
           <div>
             <h3>Add New Faculty Member</h3>
-            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 4px;">Register a faculty account in Supabase</p>
+            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 4px;">Register a new faculty member account</p>
           </div>
         </div>
 
@@ -69,7 +69,7 @@ export const renderAddFacultyView = (facultyList = []) => {
         <div class="admin-card-header">
           <div>
             <h3>Faculty Directory (${facultyList.length})</h3>
-            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 4px;">Live records from Supabase <code>faculty</code> table</p>
+            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 4px;">All registered faculty and staff members</p>
           </div>
         </div>
 

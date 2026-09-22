@@ -300,7 +300,11 @@ export class AuthService {
   /**
    * Sign Out
    */
-  static async signOut() {
+  static async signOut(requireConfirm = true) {
+    if (requireConfirm) {
+      const confirmed = window.confirm('Are you sure you want to log out?');
+      if (!confirmed) return false;
+    }
     try {
       if (supabase && supabase.auth) {
         await supabase.auth.signOut();
@@ -311,6 +315,7 @@ export class AuthService {
       localStorage.removeItem(STORAGE_KEY);
       window.location.href = '/index.html';
     }
+    return true;
   }
 
   /**

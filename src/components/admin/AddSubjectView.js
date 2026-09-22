@@ -71,7 +71,7 @@ export const renderAddSubjectView = (subjectsList = []) => {
         <div class="admin-card-header">
           <div>
             <h3>Curriculum Lectures (${subjectsList.length})</h3>
-            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 4px;">Live records from Supabase <code>subjects</code> table</p>
+            <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 4px;">All curriculum courses and subjects</p>
           </div>
         </div>
 

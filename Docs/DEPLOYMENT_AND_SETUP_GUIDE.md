@@ -45,6 +45,7 @@ Before beginning, make sure you have:
    - `supabase/migrations/20260922000008_fix_faculty_assignment_rls.sql`
    - `supabase/migrations/20260922000009_add_lecture_id_and_date_to_assignments.sql`
    - `supabase/migrations/20260922000010_student_password_auth.sql`
+   - `supabase/migrations/20260922000011_fix_section_subjects_and_admin_rls.sql` (Enables full CRUD on academic and scheduling tables)
 
 3. (Optional) Run `supabase/seeds/seed.sql` to populate initial demo faculty, students, classes, and admin accounts.
 

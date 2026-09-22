@@ -50,7 +50,7 @@ export class FacultyDashboardApp {
       <div style="display: flex; align-items: center; justify-content: center; height: 100vh; font-family: var(--font-sans); color: var(--text-muted);">
         <div style="text-align: center;">
           <div style="width: 40px; height: 40px; border: 3px solid #E0E7FF; border-top-color: #4F46E5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px;"></div>
-          <p style="font-weight: 600; color: #1E293B;">Loading Faculty Portal from Supabase...</p>
+          <p style="font-weight: 600; color: #1E293B;">Loading Faculty Portal...</p>
         </div>
       </div>
       <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
@@ -541,7 +541,7 @@ export class FacultyDashboardApp {
               }
             );
             this.unsavedChangesCount = 0;
-            alert('Attendance records saved successfully to Supabase database!');
+            alert('Attendance records saved successfully!');
             await this.refreshAttendance();
             await this.render();
           } catch (err) {
