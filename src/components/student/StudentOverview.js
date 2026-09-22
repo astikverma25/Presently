@@ -1,0 +1,73 @@
+/**
+ * Student Overview Screen Component
+ * Prominent Attendance Gauge & Main "Scan QR" CTA Button
+ */
+export const renderStudentOverview = (profile, currentLecture, historyList = []) => {
+  const pct = profile?.attendancePercentage !== undefined ? profile.attendancePercentage : 100;
+  const isEligible = pct >= 75;
+  const isLive = currentLecture?.isLive;
+
+  const recentItemsHTML = historyList.slice(0, 3).map(item => `
+    <div class="history-item-card" style="margin-bottom: 8px;">
+      <div class="history-left-info">
+        <h4>${item.subjectName}</h4>
+        <p>${item.date} • ${item.time !== '—' ? item.time : 'Scanned'}</p>
+      </div>
+      <span class="history-status-badge ${item.status}">
+        ${item.status === 'present' ? '● Present' : 'Absent'}
+      </span>
+    </div>
+  `).join('');
+
+  return `
+    <!-- 1. Overall Attendance Card -->
+    <div class="student-stat-card">
+      <div class="stat-left">
+        <h3>Overall Attendance</h3>
+        <div class="percent-big" style="color: ${isEligible ? 'var(--primary-color, #4338CA)' : '#E11D48'};">${pct}%</div>
+        <p style="color: ${isEligible ? '#10B981' : '#E11D48'}; font-weight: 600;">
+          ${isEligible ? 'Eligible for examinations (≥ 75%)' : 'Attendance below required 75% threshold'}
+        </p>
+      </div>
+      <div class="stat-progress-dial">
+        <span>${profile?.attendedClasses || 0}/${profile?.totalClasses || 0}</span>
+      </div>
+    </div>
+
+    <!-- 2. Active Session Card -->
+    <div class="active-lecture-card">
+      <div class="lecture-header-row">
+        <span class="${isLive ? 'lecture-status-live' : 'badge-standby'}" style="${!isLive ? 'background: #F1F5F9; color: #64748B; font-weight: 600; padding: 4px 10px; border-radius: 999px;' : ''}">
+          ${currentLecture?.badgeText || (isLive ? 'Live Session Active' : 'Class Standby')}
+        </span>
+        <span style="font-size: 0.8rem; color: #4338CA; font-weight: 700;">${currentLecture?.roomNo || ''}</span>
+      </div>
+
+      <h4>${currentLecture?.subjectName || 'No Class Scheduled'}</h4>
+      <p>${currentLecture?.timeWindow || ''} ${currentLecture?.facultyName && currentLecture.facultyName !== '—' ? `• Faculty: ${currentLecture.facultyName}` : ''}</p>
+
+      <button type="button" class="btn-scan-main" id="btn-open-scanner">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+          <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+        </svg>
+        Scan Classroom QR
+      </button>
+    </div>
+
+    <!-- 3. Recent Attendance Activity -->
+    <div style="margin-top: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h4 style="font-size: 0.95rem; font-weight: 700; color: #0F172A;">Recent Attendance</h4>
+        <span style="font-size: 0.8rem; color: #6366F1; font-weight: 600;">${historyList.length} Recorded</span>
+      </div>
+      ${historyList.length > 0 ? recentItemsHTML : `
+        <div style="background: #FFFFFF; border: 1px dashed var(--student-border); border-radius: 16px; padding: 20px; text-align: center; color: #64748B; font-size: 0.85rem;">
+          No attendance records yet. Scan the live QR above to mark your presence!
+        </div>
+      `}
+    </div>
+  `;
+};

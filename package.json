@@ -1,0 +1,28 @@
+{
+  "name": "presently-qr-attendance",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Presently - Smart QR-Based Attendance Management System for Schools and Colleges",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "html5-qrcode": "^2.3.8",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  },
+  "keywords": [
+    "attendance",
+    "qr-code",
+    "supabase",
+    "education",
+    "realtime"
+  ],
+  "author": "Presently Team",
+  "license": "MIT"
+}

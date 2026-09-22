@@ -1,0 +1,657 @@
+/* ==============================================================================
+   Presently - Student Mobile Portal Stylesheet
+   Mobile-First, Responsive & Modern Touch UI
+   ============================================================================== */
+
+:root {
+  --student-primary: #4338CA;
+  --student-primary-hover: #3730A3;
+  --student-primary-light: #EEF2FF;
+  --student-bg: #F8FAFC;
+  --student-card-bg: #FFFFFF;
+  --student-text-main: #0F172A;
+  --student-text-muted: #64748B;
+  --student-border: #E2E8F0;
+  --student-border-subtle: #F1F5F9;
+  --student-success: #15803D;
+  --student-success-bg: #DCFCE7;
+  --student-danger: #B91C1C;
+  --student-danger-bg: #FEE2E2;
+  --student-radius-md: 14px;
+  --student-radius-lg: 20px;
+  --student-radius-full: 9999px;
+  --student-font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+body.student-body {
+  font-family: var(--student-font);
+  background-color: #0F172A; /* Dark backdrop for desktop, container is mobile centered */
+  color: var(--student-text-main);
+  min-height: 100vh;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Mobile Frame Container */
+.student-mobile-container {
+  width: 100%;
+  max-width: 440px;
+  height: 100vh;
+  max-height: 920px;
+  background-color: var(--student-bg);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.4);
+}
+
+@media (min-width: 480px) {
+  .student-mobile-container {
+    border-radius: 36px;
+    height: 90vh;
+    border: 6px solid #1E293B;
+  }
+}
+
+/* Top App Bar */
+.student-topbar {
+  background: #FFFFFF;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--student-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.student-brand-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.student-brand-logo {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--student-primary);
+  font-style: italic;
+}
+
+.student-portal-tag {
+  background: var(--student-primary-light);
+  color: var(--student-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.student-profile-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.student-avatar-circle {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.student-name-roll {
+  display: flex;
+  flex-direction: column;
+}
+
+.student-name-text {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0F172A;
+  line-height: 1.2;
+}
+
+.student-roll-text {
+  font-size: 0.74rem;
+  color: #64748B;
+}
+
+/* Scrollable View Area */
+.student-scroll-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 18px 90px 18px; /* Extra bottom padding for bottom nav */
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* 1. Overview Attendance Stat Banner */
+.student-stat-card {
+  background: linear-gradient(135deg, #4338CA 0%, #312E81 100%);
+  border-radius: var(--student-radius-lg);
+  padding: 22px 20px;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 10px 24px -4px rgba(67, 56, 202, 0.35);
+}
+
+.stat-left h3 {
+  font-size: 0.85rem;
+  color: #C7D2FE;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.stat-left .percent-big {
+  font-size: 2.2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.stat-left p {
+  font-size: 0.78rem;
+  color: #A5B4FC;
+  margin-top: 6px;
+}
+
+.stat-progress-dial {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 5px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #FBBF24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+/* 2. Active Session Card */
+.active-lecture-card {
+  background: #FFFFFF;
+  border: 1.5px solid #C7D2FE;
+  border-radius: var(--student-radius-lg);
+  padding: 20px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+}
+
+.lecture-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.lecture-status-live {
+  background: var(--student-success-bg);
+  color: var(--student-success);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--student-radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.lecture-status-live::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--student-success);
+}
+
+.active-lecture-card h4 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0F172A;
+  margin-bottom: 4px;
+}
+
+.active-lecture-card p {
+  font-size: 0.85rem;
+  color: #64748B;
+  margin-bottom: 18px;
+}
+
+/* Primary QR Scan Button */
+.btn-scan-main {
+  width: 100%;
+  background: var(--student-primary);
+  color: #FFFFFF;
+  font-size: 1.05rem;
+  font-weight: 700;
+  padding: 16px;
+  border-radius: var(--student-radius-md);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(67, 56, 202, 0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-scan-main:hover {
+  background: var(--student-primary-hover);
+  transform: translateY(-2px);
+}
+
+.btn-scan-main svg {
+  stroke-width: 2.2;
+}
+
+/* 3. Attendance History List */
+.history-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.history-card-header h3 {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #0F172A;
+}
+
+.history-item-card {
+  background: #FFFFFF;
+  border: 1px solid var(--student-border);
+  border-radius: var(--student-radius-md);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.history-left-info h4 {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #0F172A;
+  margin-bottom: 2px;
+}
+
+.history-left-info p {
+  font-size: 0.78rem;
+  color: #64748B;
+}
+
+.history-status-badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: var(--student-radius-full);
+}
+
+.history-status-badge.present {
+  background: var(--student-success-bg);
+  color: var(--student-success);
+}
+
+.history-status-badge.absent {
+  background: var(--student-danger-bg);
+  color: var(--student-danger);
+}
+
+/* 4. Bottom Tab Bar Navigation */
+.student-bottom-nav {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  background: #FFFFFF;
+  border-top: 1px solid var(--student-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 10px;
+  z-index: 100;
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: #94A3B8;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 8px 16px;
+  border-radius: 12px;
+}
+
+.bottom-nav-item.active {
+  color: var(--student-primary);
+}
+
+.bottom-nav-item.active svg {
+  stroke: var(--student-primary);
+}
+
+/* 5. In-App Camera Scanner Viewport Modal */
+.scanner-viewport-modal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #000000;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.25s ease;
+}
+
+.scanner-viewport-modal.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.scanner-modal-header {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #FFFFFF;
+  z-index: 10;
+}
+
+.btn-close-scanner {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #FFFFFF;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scanner-camera-area {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 340px;
+  background: #000000;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#camera-stream-viewport {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  z-index: 1 !important;
+  background: #000000 !important;
+}
+
+#camera-stream-viewport * {
+  background: transparent !important;
+}
+
+#camera-stream-viewport video {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  display: block !important;
+  background: #000000 !important;
+}
+
+#camera-stream-viewport canvas {
+  display: none !important;
+}
+
+#camera-stream-viewport [id*="scan_region"],
+#camera-stream-viewport [id*="shaded_region"],
+#camera-stream-viewport svg {
+  display: none !important;
+}
+
+.camera-viewfinder {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: min(260px, 72vw) !important;
+  height: min(260px, 72vw) !important;
+  border: 3px solid #6366F1 !important;
+  border-radius: 24px !important;
+  background: transparent !important;
+  box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.6) !important;
+  overflow: hidden !important;
+  z-index: 10 !important;
+  pointer-events: none !important;
+}
+
+.laser-scanner-line {
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #FBBF24, #38BDF8, #FBBF24, transparent);
+  position: absolute;
+  top: 0;
+  animation: scanLaser 2s infinite linear;
+  box-shadow: 0 0 14px rgba(251, 191, 36, 0.9);
+}
+
+@keyframes scanLaser {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}
+
+.scanner-instructions {
+  padding: 24px;
+  text-align: center;
+  color: #FFFFFF;
+  z-index: 10;
+}
+
+.btn-simulate-scan {
+  background: #10B981;
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 12px 24px;
+  border-radius: var(--student-radius-full);
+  border: none;
+  cursor: pointer;
+  margin-top: 12px;
+}
+
+/* ==============================================================================
+   In-App Scan Feedback Overlay Styles
+============================================================================== */
+.scan-feedback-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.22s ease;
+}
+
+.scan-feedback-backdrop.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.scan-feedback-card {
+  background: #FFFFFF;
+  border-radius: 24px;
+  width: 100%;
+  max-width: 360px;
+  padding: 28px 24px 24px 24px;
+  text-align: center;
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.35);
+  transform: translateY(24px) scale(0.96);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+}
+
+.scan-feedback-backdrop.active .scan-feedback-card {
+  transform: translateY(0) scale(1);
+}
+
+.feedback-icon-circle {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  margin: 0 auto 18px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.feedback-icon-circle.success {
+  background: #ECFDF5;
+  border: 3px solid #D1FAE5;
+  box-shadow: 0 0 0 8px rgba(16, 185, 129, 0.12);
+  animation: pulseSuccess 1.5s infinite;
+}
+
+.feedback-icon-circle.error {
+  background: #FEF2F2;
+  border: 3px solid #FEE2E2;
+  box-shadow: 0 0 0 8px rgba(239, 68, 68, 0.12);
+}
+
+.feedback-icon-circle.warning {
+  background: #FFFBEB;
+  border: 3px solid #FEF3C7;
+  box-shadow: 0 0 0 8px rgba(245, 158, 11, 0.14);
+  animation: pulseWarning 1.5s infinite;
+}
+
+@keyframes pulseWarning {
+  0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.3); }
+  70% { box-shadow: 0 0 0 14px rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+@keyframes pulseSuccess {
+  0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.3); }
+  70% { box-shadow: 0 0 0 14px rgba(16, 185, 129, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+.feedback-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0F172A;
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.feedback-message {
+  font-size: 0.92rem;
+  color: #475569;
+  line-height: 1.45;
+  margin-bottom: 16px;
+}
+
+.feedback-sub-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #F1F5F9;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 999px;
+  margin-bottom: 20px;
+}
+
+.btn-feedback-action {
+  width: 100%;
+  padding: 13px 20px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-feedback-action.btn-success {
+  background: #10B981;
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+
+.btn-feedback-action.btn-success:active {
+  background: #059669;
+  transform: scale(0.98);
+}
+
+.btn-feedback-action.btn-warning {
+  background: #F59E0B;
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+}
+
+.btn-feedback-action.btn-warning:active {
+  background: #D97706;
+  transform: scale(0.98);
+}
+
+.btn-feedback-action.btn-retry {
+  background: #EF4444;
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+}
+
+.btn-feedback-action.btn-retry:active {
+  background: #DC2626;
+  transform: scale(0.98);
+}
