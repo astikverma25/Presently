@@ -76,16 +76,8 @@ Simply open `index.html` in any modern web browser or run with any static HTTP s
 
 ---
 
-## 🔒 Supabase Backend Setup
+## 🌐 Deployment & Security Guide
 
-To apply database migrations locally using Supabase CLI:
-```bash
-npx supabase start
-npx supabase db reset
-```
-To deploy Edge Functions:
-```bash
-npx supabase functions deploy generate-qr-token
-npx supabase functions deploy verify-attendance
-npx supabase functions deploy export-report
-```
+For a complete step-by-step production deployment guide with **Netlify**, **Supabase backend provisioning**, and **security hardening (CSP, HTTPS camera permissions, RLS)**, refer to:
+👉 **[Deployment & Setup Guide](file:///d:/Attendence/Docs/DEPLOYMENT_AND_SETUP_GUIDE.md)**
+
