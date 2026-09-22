@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
+import { createClient } from '@supabase/supabase-js';
 
 // Read from Vite environment variables, window object, or default credentials
 const SUPABASE_URL =

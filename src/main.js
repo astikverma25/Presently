@@ -2,33 +2,30 @@ import { initAuthModal } from './components/landing/AuthModal.js';
 import { initDemoModal } from './components/landing/DemoModal.js';
 import { initTutorialModal } from './components/landing/TutorialModal.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+const initApp = () => {
   // Initialize Modals
   const authModal = initAuthModal();
   const demoModal = initDemoModal();
   const tutorialModal = initTutorialModal();
 
-  // Attach Modal Triggers
-  document.querySelectorAll('.trigger-login, .trigger-signup').forEach(el => {
-    el.addEventListener('click', (e) => {
-      e.preventDefault();
-      authModal.open();
-    });
-  });
+  // Attach Modal Triggers via direct bindings and document click delegation
+  const handleTriggerClick = (e) => {
+    const target = e.target.closest('.trigger-login, .trigger-signup, .btn-nav-login, .btn-nav-signup, .trigger-demo, .trigger-tutorial');
+    if (!target) return;
 
-  document.querySelectorAll('.trigger-demo').forEach(el => {
-    el.addEventListener('click', (e) => {
-      e.preventDefault();
+    e.preventDefault();
+    if (target.matches('.trigger-login, .btn-nav-login, .btn-mobile-header-login')) {
+      authModal.open('student');
+    } else if (target.matches('.trigger-signup, .btn-nav-signup, .btn-mobile-nav-signup')) {
+      authModal.open('student');
+    } else if (target.matches('.trigger-demo')) {
       demoModal.open();
-    });
-  });
-
-  document.querySelectorAll('.trigger-tutorial').forEach(el => {
-    el.addEventListener('click', (e) => {
-      e.preventDefault();
+    } else if (target.matches('.trigger-tutorial')) {
       tutorialModal.open();
-    });
-  });
+    }
+  };
+
+  document.addEventListener('click', handleTriggerClick);
 
   // Testimonials Navigation Switching
   const testimonials = [
@@ -127,4 +124,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-});
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
