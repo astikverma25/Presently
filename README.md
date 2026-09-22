@@ -57,7 +57,7 @@ Presently/
 
 The landing page comes pre-packaged with high-resolution vector artwork. If you have custom PNG images to drop in:
 
-1. **Hero Student Image**: Place your image at `public/assets/hero-student.png` (or `.svg`).
+1. **Hero Student Image**: Place your image at `public/assets/studenticon.png` (or `.svg`).
 2. **Mobile Device Mockup**: Place your screenshot at `public/assets/app-screen-mockup.png`.
 3. **Avatars**: Place customer avatars in `public/assets/avatars/`.
 
