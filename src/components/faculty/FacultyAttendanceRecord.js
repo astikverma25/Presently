@@ -20,11 +20,9 @@ export const renderFacultyAttendanceRecord = (records = [], options = {}, assign
   const parsedDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
   const selectedDayName = !isNaN(parsedDate.getTime()) ? dayNames[parsedDate.getDay()] : '';
 
-  // 2. Filter lectures that are scheduled for this specific date / day
-  const dateScheduledLectures = assignedLectures.filter(l => {
-    const matchesExactDate = l.lecDate && l.lecDate === currentDate;
-    const matchesDayOfWeek = l.dayOfWeek && selectedDayName && l.dayOfWeek.toLowerCase() === selectedDayName.toLowerCase();
-    return matchesExactDate || matchesDayOfWeek;
+  // 2. Filter lectures strictly scheduled for this specific date
+  const dateScheduledLectures = (assignedLectures || []).filter(l => {
+    return l.lecDate === currentDate || l.rawLecDate === currentDate;
   });
 
   // 3. Unique sections scheduled on this date

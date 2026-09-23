@@ -16,40 +16,45 @@ export const renderFacultyQRSession = (activeLecture = {}, studentList = [], ass
   const parsedDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
   const selectedDayName = !isNaN(parsedDate.getTime()) ? dayNames[parsedDate.getDay()] : '';
 
+  // 2. Filter assigned lectures strictly for the selected date
+  const dateLectures = (assignedLectures || []).filter(l => {
+    return l.lecDate === currentDate || l.rawLecDate === currentDate;
+  });
+
+  // 3. Unique Sections from assigned lectures on this selected date
+  const dateSections = [...new Set(dateLectures.map(l => l.section).filter(Boolean))];
+
   const currentSection = activeLecture?.section || '';
   const currentLectureId = activeLecture?.id || '';
 
-  // 2. All Unique Sections from assigned lectures
-  const allSections = [...new Set(assignedLectures.map(l => l.section).filter(Boolean))];
-
   let sectionOptionsHTML = '';
-  if (allSections.length === 0) {
-    sectionOptionsHTML = `<option value="" disabled selected>No sections assigned</option>`;
+  if (dateSections.length === 0) {
+    sectionOptionsHTML = `<option value="" disabled selected>No classes on ${currentDate}</option>`;
   } else {
     sectionOptionsHTML = `
-      <option value="" disabled ${!currentSection ? 'selected' : ''}>Select Section...</option>
-    ` + allSections.map(sec => {
+      <option value="" disabled ${!currentSection || !dateSections.some(s => (s || '').toLowerCase() === currentSection.toLowerCase()) ? 'selected' : ''}>Select Section...</option>
+    ` + dateSections.map(sec => {
       const isSel = currentSection && currentSection.toLowerCase() === sec.toLowerCase();
       return `<option value="${sec}" ${isSel ? 'selected' : ''}>Section ${sec}</option>`;
     }).join('');
   }
 
-  // 3. Filter assigned lectures for the selected section
-  const sectionLectures = currentSection 
-    ? assignedLectures.filter(l => (l.section || '').toLowerCase() === currentSection.toLowerCase())
+  // 4. Filter assigned lectures for the selected section ON the selected date
+  const sectionDateLectures = currentSection 
+    ? dateLectures.filter(l => (l.section || '').toLowerCase() === currentSection.toLowerCase())
     : [];
 
   let lectureOptionsHTML = '';
   if (!currentSection) {
     lectureOptionsHTML = `<option value="" disabled selected>Select Section first...</option>`;
-  } else if (sectionLectures.length === 0) {
-    lectureOptionsHTML = `<option value="" disabled selected>No lectures for Sec ${currentSection}</option>`;
+  } else if (sectionDateLectures.length === 0) {
+    lectureOptionsHTML = `<option value="" disabled selected>No lectures for Sec ${currentSection} on ${currentDate}</option>`;
   } else {
     lectureOptionsHTML = `
       <option value="" disabled ${!currentLectureId ? 'selected' : ''}>Select Lecture...</option>
-    ` + sectionLectures.map(l => {
+    ` + sectionDateLectures.map(l => {
       const isSel = currentLectureId === l.id;
-      const title = `${l.className || 'Lecture'} • ${l.time || 'Period'} (${l.dayOfWeek || ''})`;
+      const title = `${l.className || 'Lecture'} • ${l.time || 'Period'} (${selectedDayName || l.dayOfWeek || ''})`;
       return `<option value="${l.id}" ${isSel ? 'selected' : ''}>${title}</option>`;
     }).join('');
   }

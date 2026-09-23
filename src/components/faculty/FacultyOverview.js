@@ -4,14 +4,20 @@ import { FacultyService } from '../../services/facultyService.js';
 
 /**
  * Overview View Component (100% Real Live Supabase Data)
+ * Exclusively displays Today's Lectures & Real-time Progress
  */
-export const renderFacultyOverview = async (lectures = [], sectionAttendance = [], kpis = {}, activities = []) => {
+export const renderFacultyOverview = async (
+  lectures = [], 
+  sectionAttendance = [], 
+  kpis = {}, 
+  activities = []
+) => {
   const overallAverage = FacultyService.calculateOverallAverage(sectionAttendance);
 
   const lecturesHTML = lectures.length > 0
     ? lectures.map(renderLectureCard).join('')
     : `
-      <div class="overview-empty-state">
+      <div class="overview-empty-state" style="padding: 24px 16px;">
         <div class="overview-empty-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -20,8 +26,8 @@ export const renderFacultyOverview = async (lectures = [], sectionAttendance = [
             <line x1="3" y1="10" x2="21" y2="10"></line>
           </svg>
         </div>
-        <h4>No Assigned Lectures Found</h4>
-        <p>Assigned lectures will appear here. Switch to the <strong>QR Sessions</strong> tab to start an on-demand session.</p>
+        <h4>No Lectures Scheduled Today</h4>
+        <p>You have no classes remaining for today. Click <strong>View full schedule</strong> to view previous or upcoming dates.</p>
       </div>
     `;
 
@@ -74,7 +80,7 @@ export const renderFacultyOverview = async (lectures = [], sectionAttendance = [
       <div class="lectures-panel">
         <div class="panel-header-row">
           <h3>Today's lectures</h3>
-          <button type="button" class="panel-link-btn" id="btn-view-schedule" style="background: none; border: none; color: #4338CA; font-weight: 600; cursor: pointer;">View schedule</button>
+          <button type="button" class="panel-link-btn" id="btn-view-schedule" style="background: none; border: none; color: #4338CA; font-weight: 600; cursor: pointer;">View full schedule</button>
         </div>
 
         <div class="lectures-list">
@@ -107,3 +113,4 @@ export const renderFacultyOverview = async (lectures = [], sectionAttendance = [
     </div>
   `;
 };
+

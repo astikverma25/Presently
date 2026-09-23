@@ -9,7 +9,7 @@ export const renderAddSubjectView = (subjectsList = []) => {
           <td>${idx + 1}</td>
           <td><strong>${s.subject_name || s.subjectName}</strong></td>
           <td><code>${s.subject_code || s.subjectCode}</code></td>
-          <td><span class="badge-tag">${s.semester || '—'}</span></td>
+          <td><span class="badge-tag">Semester ${s.semester || '—'}</span></td>
         </tr>
       `).join('')
     : `
@@ -47,14 +47,14 @@ export const renderAddSubjectView = (subjectsList = []) => {
               <label>Semester *</label>
               <select name="semester" class="admin-select" required>
                 <option value="" disabled selected>Select Semester...</option>
-                <option value="1st">1st Semester</option>
-                <option value="2nd">2nd Semester</option>
-                <option value="3rd">3rd Semester</option>
-                <option value="4th">4th Semester</option>
-                <option value="5th">5th Semester</option>
-                <option value="6th">6th Semester</option>
-                <option value="7th">7th Semester</option>
-                <option value="8th">8th Semester</option>
+                <option value="1">Semester 1</option>
+                <option value="2">Semester 2</option>
+                <option value="3">Semester 3</option>
+                <option value="4">Semester 4</option>
+                <option value="5">Semester 5</option>
+                <option value="6">Semester 6</option>
+                <option value="7">Semester 7</option>
+                <option value="8">Semester 8</option>
               </select>
             </div>
           </div>

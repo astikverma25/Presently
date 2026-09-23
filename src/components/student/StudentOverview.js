@@ -1,3 +1,5 @@
+import { getIndianDateString } from '../../utils/dateUtils.js';
+
 /**
  * Student Overview Screen Component
  * Prominent Attendance Gauge & Main "Scan QR" CTA Button
@@ -7,11 +9,19 @@ export const renderStudentOverview = (profile, currentLecture, historyList = [])
   const isEligible = pct >= 75;
   const isLive = currentLecture?.isLive;
 
-  const recentItemsHTML = historyList.slice(0, 3).map(item => `
+  // Filter ONLY today's attendance records in Indian Standard Time
+  const todayStr = getIndianDateString();
+  const todayRecords = (historyList || []).filter(item => {
+    if (item.rawDate && item.rawDate === todayStr) return true;
+    if (item.date && (item.date.includes('Today') || item.date === todayStr)) return true;
+    return false;
+  });
+
+  const recentItemsHTML = todayRecords.map(item => `
     <div class="history-item-card" style="margin-bottom: 8px;">
       <div class="history-left-info">
         <h4>${item.subjectName}</h4>
-        <p>${item.date} • ${item.time !== '—' ? item.time : 'Scanned'}</p>
+        <p>Today • ${item.time !== '—' ? item.time : 'Scanned'}</p>
       </div>
       <span class="history-status-badge ${item.status}">
         ${item.status === 'present' ? '● Present' : 'Absent'}
@@ -57,17 +67,18 @@ export const renderStudentOverview = (profile, currentLecture, historyList = [])
       </button>
     </div>
 
-    <!-- 3. Recent Attendance Activity -->
+    <!-- 3. Today's Attendance Activity -->
     <div style="margin-top: 20px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h4 style="font-size: 0.95rem; font-weight: 700; color: #0F172A;">Recent Attendance</h4>
-        <span style="font-size: 0.8rem; color: #6366F1; font-weight: 600;">${historyList.length} Recorded</span>
+        <h4 style="font-size: 0.95rem; font-weight: 700; color: #0F172A;">Today's Attendance</h4>
+        <span style="font-size: 0.8rem; color: #6366F1; font-weight: 600;">${todayRecords.length} Recorded Today</span>
       </div>
-      ${historyList.length > 0 ? recentItemsHTML : `
+      ${todayRecords.length > 0 ? recentItemsHTML : `
         <div style="background: #FFFFFF; border: 1px dashed var(--student-border); border-radius: 16px; padding: 20px; text-align: center; color: #64748B; font-size: 0.85rem;">
-          No attendance records yet. Scan the live QR above to mark your presence!
+          No attendance records marked yet today. Scan the live QR above to mark your presence!
         </div>
       `}
     </div>
   `;
 };
+

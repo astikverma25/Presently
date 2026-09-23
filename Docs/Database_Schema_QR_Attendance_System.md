@@ -62,61 +62,58 @@
 
 ---
 
-## 5. section_subjects
+## 5. faculty_assignment
 
-Represents a unique subject-section offering (solves duplicate class-name ambiguity).
-
-| Column | Type | Notes |
-|---|---|---|
-| id | UUID (PK) | |
-| subject_id | UUID (FK → subjects) | |
-| section_id | UUID (FK → sections) | |
-| — | — | `UNIQUE(subject_id, section_id)` |
-
----
-
-## 6. faculty_assignment
-
-Links a faculty member to a specific section_subject, with editable lecture timing.
+Directly links a faculty member, subject, and section with scheduled lecture date and timing. Single source of truth for lecture schedule.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | UUID (PK) | |
-| section_subject_id | UUID (FK → section_subjects) | |
 | faculty_id | UUID (FK → faculty) | |
-| day_of_week | Text | |
-| start_time | Time | Editable |
-| end_time | Time | Editable |
-| room_no | Text | Editable |
+| subject_id | UUID (FK → subjects) | Direct link to Subject Master |
+| section_id | UUID (FK → sections) | Direct link to Section Master |
+| lec_id | Text (Unique) | e.g. `LEC-20260922-A1B2C` |
+| lec_date | Date | Indian Standard Date (`YYYY-MM-DD`). Day of week derived automatically. |
+| status | Text | `scheduled`, `ongoing`, `completed`, `cancelled` |
+| start_time | Time | e.g. `10:00:00` |
+| end_time | Time | e.g. `11:00:00` |
+| room_no | Text | e.g. `Room 201`, `Lab 3` |
 
 ---
 
 ## 7. attendance_sessions
 
-One QR session instance for a lecture.
+One QR session instance for a live lecture. Linked directly to `faculty_assignment`.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | UUID (PK) | |
-| faculty_assignment_id | UUID (FK → faculty_assignment) | |
-| date | Date | |
+| faculty_assignment_id | UUID (FK → faculty_assignment) | Inherits scheduled lecture date & details |
 | qr_expiry_sec | Integer | Default 15, editable by faculty at session start |
-| started_at | Timestamp | |
-| ended_at | Timestamp | |
+| current_qr_token | Text | Rolling dynamic TOTP cryptographic payload |
+| token_expires_at | Timestamptz | Expiry timestamp for rolling token |
+| started_at | Timestamptz | Session start UTC timestamp |
+| ended_at | Timestamptz | Session close UTC timestamp |
+| status | Text | `active`, `completed`, `cancelled` |
 
 ---
 
 ## 8. attendance_records
 
-One student's attendance mark for a session.
+One student's attendance mark for a lecture session.
 
 | Column | Type | Notes |
 |---|---|---|
 | id | UUID (PK) | |
-| session_id | UUID (FK → attendance_sessions) | |
+| session_id | UUID (FK → attendance_sessions, nullable) | Session instance |
+| faculty_assignment_id | UUID (FK → faculty_assignment) | Direct link to lecture assignment |
 | student_id | UUID (FK → students) | |
-| status | Text | present / absent |
-| marked_at | Timestamp | Null if absent |
+| lec_id | Text | Unique lecture identifier |
+| lecture_date | Date | Indian Standard Date (`YYYY-MM-DD`) |
+| status | Text | `present`, `absent`, `late` |
+| marked_at | Timestamptz | Check-in timestamp (formatted in IST) |
+| verification_method | Text | `qr_scan`, `manual_override`, `face_verified` |
+| device_id | Text | Anti-proxy device tracking |
 | — | — | `UNIQUE(session_id, student_id)` |
 
 ---

@@ -1,22 +1,27 @@
 import { renderStudentHeader } from './StudentHeader.js';
 import { renderStudentOverview } from './StudentOverview.js';
 import { renderStudentHistory } from './StudentHistory.js';
-import { renderStudentBottomNav } from './StudentBottomNav.js';
+import { renderStudentReport } from './StudentReport.js';
+import { renderStudentDrawer } from './StudentDrawer.js';
 import { renderStudentScannerModal } from './StudentScannerModal.js';
+import { renderStudentProfileModal } from './StudentProfileModal.js';
 import { showScanFeedbackModal } from './ScanFeedbackModal.js';
 import { StudentService } from '../../services/studentService.js';
 import { QRScanner } from '../qr/QRScanner.js';
 
 /**
- * Master Student Dashboard Module Coordinator (Mobile-First)
+ * Master Student Dashboard Module Coordinator (Mobile-Responsive & Drawer-Enabled)
  */
 export class StudentDashboardApp {
   constructor(container) {
     this.container = container;
-    this.currentTab = 'overview'; // 'overview' | 'history'
+    this.currentTab = 'overview'; // 'overview' | 'history' | 'report'
+    this.selectedSemester = '3rd';
     this.profile = null;
     this.currentLecture = null;
     this.historyList = [];
+    this.reportData = null;
+    this.sections = [];
     this.qrScanner = null;
   }
 
@@ -33,34 +38,61 @@ export class StudentDashboardApp {
 
     try {
       this.profile = await StudentService.getProfile();
-      this.currentLecture = await StudentService.getCurrentLecture(this.profile?.sectionId, this.profile?.sectionName);
+
+      if (!this.profile) {
+        // Strict Auth Guard: User is not logged in as a student
+        this.container.innerHTML = `
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; padding: 24px; text-align: center; font-family: var(--font-sans); background: #F8FAFC;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: #EEF2FF; color: #4F46E5; display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 16px;">
+              🔒
+            </div>
+            <h2 style="font-size: 18px; font-weight: 700; color: #1E293B; margin-bottom: 8px;">Student Login Required</h2>
+            <p style="font-size: 13px; color: #64748B; max-width: 300px; margin-bottom: 20px;">Please log in with your institutional Roll Number to access your attendance.</p>
+            <a href="/index.html" style="display: inline-block; padding: 10px 22px; background: #4F46E5; color: #FFFFFF; font-weight: 600; font-size: 13px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">Go to Login</a>
+          </div>
+        `;
+        setTimeout(() => {
+          window.location.href = '/index.html';
+        }, 1000);
+        return;
+      }
+
+      this.selectedSemester = this.profile?.semester || '3rd';
+      this.currentLecture = await StudentService.getCurrentLecture(this.profile?.sectionId, this.profile?.sectionName, this.profile?.semester);
       this.historyList = await StudentService.getAttendanceHistory(this.profile?.id);
+      this.reportData = await StudentService.getSubjectAttendanceReport(this.profile?.id, this.selectedSemester);
+      this.sections = await StudentService.getAvailableSections();
     } catch (err) {
       console.error('Student Portal load error:', err);
     } finally {
-      await this.render();
+      if (this.profile) {
+        await this.render();
+      }
     }
   }
 
   async render() {
-    let tabContentHTML = '';
-    if (this.currentTab === 'overview') {
-      tabContentHTML = renderStudentOverview(this.profile, this.currentLecture, this.historyList);
-    } else if (this.currentTab === 'history') {
-      tabContentHTML = renderStudentHistory(this.historyList);
-    } else {
-      tabContentHTML = renderStudentOverview(this.profile, this.currentLecture, this.historyList);
-    }
+    const isLive = !!this.currentLecture;
+    const historyCount = this.historyList?.length || 0;
 
     this.container.innerHTML = `
       <div class="student-mobile-container">
-        ${renderStudentHeader(this.profile)}
+        ${renderStudentHeader(this.profile, this.currentTab, isLive, historyCount)}
         
-        <div class="student-scroll-content">
-          ${tabContentHTML}
-        </div>
+        <main class="student-scroll-content">
+          <div id="tab-pane-overview" class="student-tab-pane ${this.currentTab === 'overview' ? 'active' : ''}">
+            ${renderStudentOverview(this.profile, this.currentLecture, this.historyList)}
+          </div>
+          <div id="tab-pane-history" class="student-tab-pane ${this.currentTab === 'history' ? 'active' : ''}">
+            ${renderStudentHistory(this.historyList)}
+          </div>
+          <div id="tab-pane-report" class="student-tab-pane ${this.currentTab === 'report' ? 'active' : ''}">
+            ${renderStudentReport(this.reportData, this.selectedSemester)}
+          </div>
+        </main>
 
-        ${renderStudentBottomNav(this.currentTab)}
+        ${renderStudentDrawer(this.profile, this.currentTab, historyCount)}
+        ${renderStudentProfileModal(this.profile)}
         ${renderStudentScannerModal()}
       </div>
     `;
@@ -69,30 +101,271 @@ export class StudentDashboardApp {
   }
 
   attachEventListeners() {
-    // 1. Bottom Nav Tab Switching
-    this.container.querySelectorAll('.bottom-nav-item').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        this.currentTab = btn.getAttribute('data-tab');
-        if (this.currentTab === 'history') {
-          this.historyList = await StudentService.getAttendanceHistory(this.profile?.id);
-        } else if (this.currentTab === 'overview') {
-          this.profile = await StudentService.getProfile();
-          this.historyList = await StudentService.getAttendanceHistory(this.profile?.id);
-          this.currentLecture = await StudentService.getCurrentLecture(this.profile?.sectionId, this.profile?.sectionName);
+    const drawer = this.container.querySelector('#student-drawer');
+    const backdrop = this.container.querySelector('#student-drawer-backdrop');
+
+    const openDrawer = () => {
+      if (drawer) drawer.classList.add('active');
+      if (backdrop) backdrop.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    };
+
+    const closeDrawer = () => {
+      if (drawer) drawer.classList.remove('active');
+      if (backdrop) backdrop.classList.remove('active');
+      document.body.style.overflow = '';
+    };
+
+    // 1. Drawer open/close triggers
+    const menuToggleBtn = this.container.querySelector('#btn-student-menu-toggle');
+    const profilePillBtn = this.container.querySelector('#btn-open-profile-menu');
+    const closeDrawerBtn = this.container.querySelector('#btn-close-drawer');
+
+    if (menuToggleBtn) menuToggleBtn.addEventListener('click', openDrawer);
+    if (profilePillBtn) profilePillBtn.addEventListener('click', openDrawer);
+    if (closeDrawerBtn) closeDrawerBtn.addEventListener('click', closeDrawer);
+    if (backdrop) backdrop.addEventListener('click', closeDrawer);
+
+    // 2. Silky Smooth Tab Navigation (Instant Switch without DOM destruction)
+    const switchTab = async (newTab) => {
+      if (!newTab) return;
+      closeDrawer();
+      if (this.currentTab === newTab) return;
+
+      this.currentTab = newTab;
+
+      const overviewPane = this.container.querySelector('#tab-pane-overview');
+      const historyPane = this.container.querySelector('#tab-pane-history');
+      const reportPane = this.container.querySelector('#tab-pane-report');
+
+      // Hide all panes first
+      overviewPane?.classList.remove('active');
+      historyPane?.classList.remove('active');
+      reportPane?.classList.remove('active');
+
+      // Show requested active pane
+      if (newTab === 'overview') {
+        overviewPane?.classList.add('active');
+      } else if (newTab === 'history') {
+        historyPane?.classList.add('active');
+      } else if (newTab === 'report') {
+        reportPane?.classList.add('active');
+      }
+
+      // Update Top Tab buttons
+      this.container.querySelectorAll('.tab-switch-btn').forEach(btn => {
+        const btnTab = btn.getAttribute('data-tab');
+        if (btnTab === newTab) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
         }
-        await this.render();
+      });
+
+      // Update Drawer items
+      this.container.querySelectorAll('.drawer-nav-item[data-tab]').forEach(btn => {
+        const btnTab = btn.getAttribute('data-tab');
+        if (btnTab === newTab) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+
+      // Smooth scroll to top of viewport
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Silent background sync
+      if (newTab === 'report') {
+        const freshReport = await StudentService.getSubjectAttendanceReport(this.profile?.id, this.selectedSemester);
+        this.reportData = freshReport;
+        if (reportPane) {
+          reportPane.innerHTML = renderStudentReport(this.reportData, this.selectedSemester);
+        }
+      } else if (newTab === 'history') {
+        const freshHistory = await StudentService.getAttendanceHistory(this.profile?.id);
+        if (freshHistory && JSON.stringify(freshHistory) !== JSON.stringify(this.historyList)) {
+          this.historyList = freshHistory;
+          if (historyPane) historyPane.innerHTML = renderStudentHistory(this.historyList);
+        }
+      }
+    };
+
+    this.container.querySelectorAll('.tab-switch-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.getAttribute('data-tab');
+        switchTab(tab);
       });
     });
 
-    const studentLogoutBtn = this.container.querySelector('#btn-student-logout');
-    if (studentLogoutBtn) {
-      studentLogoutBtn.addEventListener('click', async () => {
+    this.container.querySelectorAll('.drawer-nav-item[data-tab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.getAttribute('data-tab');
+        switchTab(tab);
+      });
+    });
+
+    // 3. Drawer Quick Actions & Profile Modal
+    const drawerProfileBtn = this.container.querySelector('#btn-drawer-profile');
+    const drawerScanBtn = this.container.querySelector('#btn-drawer-scan');
+    const drawerRefreshBtn = this.container.querySelector('#btn-drawer-refresh');
+    const drawerLogoutBtn = this.container.querySelector('#btn-drawer-logout');
+    const profileModal = this.container.querySelector('#student-profile-modal');
+    const closeProfileModalBtn = this.container.querySelector('#btn-close-profile-modal');
+    const cancelProfileEditBtn = this.container.querySelector('#btn-cancel-profile-edit');
+    const profileForm = this.container.querySelector('#form-update-student-profile');
+
+    const openProfileModal = () => {
+      closeDrawer();
+      if (profileModal) profileModal.classList.add('active');
+    };
+
+    const closeProfileModal = () => {
+      if (profileModal) profileModal.classList.remove('active');
+    };
+
+    if (drawerProfileBtn) drawerProfileBtn.addEventListener('click', openProfileModal);
+    if (closeProfileModalBtn) closeProfileModalBtn.addEventListener('click', closeProfileModal);
+    if (cancelProfileEditBtn) cancelProfileEditBtn.addEventListener('click', closeProfileModal);
+
+    if (profileModal) {
+      profileModal.addEventListener('click', (e) => {
+        if (e.target === profileModal) closeProfileModal();
+      });
+    }
+
+    // 4. Profile Form Change Tracking & Submit
+    if (profileForm) {
+      const saveBtn = this.container.querySelector('#btn-save-profile');
+      const trackedInputs = profileForm.querySelectorAll('.profile-track-change');
+
+      // Record baseline values
+      const initialValues = {};
+      trackedInputs.forEach(input => {
+        initialValues[input.name] = input.value || '';
+      });
+
+      const checkFormChanges = () => {
+        let hasChanges = false;
+        trackedInputs.forEach(input => {
+          const initial = (initialValues[input.name] || '').trim();
+          const current = (input.value || '').trim();
+          if (initial !== current) {
+            hasChanges = true;
+          }
+        });
+
+        const nameInput = profileForm.querySelector('#edit-student-name');
+        const isNameValid = nameInput && nameInput.value.trim().length > 0;
+
+        if (saveBtn) {
+          saveBtn.disabled = !(hasChanges && isNameValid);
+        }
+      };
+
+      profileForm.addEventListener('input', checkFormChanges);
+      profileForm.addEventListener('change', checkFormChanges);
+
+      profileForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const feedbackBox = this.container.querySelector('#profile-update-feedback');
+        const btnText = saveBtn?.querySelector('.btn-text');
+        const btnSpinner = saveBtn?.querySelector('.btn-spinner');
+
+        const formData = new FormData(profileForm);
+        const name = formData.get('name');
+        const admissionId = formData.get('admissionId');
+        const dateOfBirth = formData.get('dateOfBirth');
+        const personalEmail = formData.get('personalEmail');
+        const phone = formData.get('phone');
+        const parentContact = formData.get('parentContact');
+
+        if (saveBtn) saveBtn.disabled = true;
+        if (btnText) btnText.textContent = 'Saving...';
+        if (btnSpinner) btnSpinner.style.display = 'inline-block';
+        if (feedbackBox) feedbackBox.style.display = 'none';
+
+        try {
+          const res = await StudentService.updateProfile(this.profile?.id, {
+            name,
+            admissionId,
+            dateOfBirth,
+            personalEmail,
+            phone,
+            parentContact
+          });
+
+          if (res.success) {
+            if (feedbackBox) {
+              feedbackBox.className = 'profile-feedback-box success';
+              feedbackBox.textContent = 'Profile updated successfully!';
+              feedbackBox.style.display = 'block';
+            }
+
+            // Refresh student state & re-render
+            this.profile = await StudentService.getProfile();
+            this.currentLecture = await StudentService.getCurrentLecture(this.profile?.sectionId, this.profile?.sectionName, this.profile?.semester);
+
+            setTimeout(async () => {
+              closeProfileModal();
+              await this.render();
+            }, 750);
+          } else {
+            if (feedbackBox) {
+              feedbackBox.className = 'profile-feedback-box error';
+              feedbackBox.textContent = res.message || 'Failed to update profile. Please try again.';
+              feedbackBox.style.display = 'block';
+            }
+            if (saveBtn) saveBtn.disabled = false;
+          }
+        } catch (err) {
+          if (feedbackBox) {
+            feedbackBox.className = 'profile-feedback-box error';
+            feedbackBox.textContent = err?.message || 'Unexpected error while updating profile.';
+            feedbackBox.style.display = 'block';
+          }
+          if (saveBtn) saveBtn.disabled = false;
+        } finally {
+          if (btnText) btnText.textContent = 'Save Changes';
+          if (btnSpinner) btnSpinner.style.display = 'none';
+        }
+      });
+    }
+
+    if (drawerScanBtn) {
+      drawerScanBtn.addEventListener('click', () => {
+        closeDrawer();
+        const scannerModal = this.container.querySelector('#student-scanner-modal');
+        if (scannerModal) {
+          scannerModal.classList.add('active');
+          this.startCameraStream();
+        }
+      });
+    }
+
+    if (drawerRefreshBtn) {
+      drawerRefreshBtn.addEventListener('click', async () => {
+        closeDrawer();
+        drawerRefreshBtn.style.opacity = '0.5';
+        try {
+          this.profile = await StudentService.getProfile();
+          this.currentLecture = await StudentService.getCurrentLecture(this.profile?.sectionId, this.profile?.sectionName, this.profile?.semester);
+          this.historyList = await StudentService.getAttendanceHistory(this.profile?.id);
+        } finally {
+          await this.render();
+        }
+      });
+    }
+
+    if (drawerLogoutBtn) {
+      drawerLogoutBtn.addEventListener('click', async () => {
+        closeDrawer();
         const { AuthService } = await import('../../services/authService.js');
         await AuthService.signOut();
       });
     }
 
-    // 2. Open Camera Scanner Modal
+    // 4. Open Camera Scanner Modal from Overview / Action cards
     const openScannerBtn = this.container.querySelector('#btn-open-scanner');
     const scannerModal = this.container.querySelector('#student-scanner-modal');
     const closeScannerBtn = this.container.querySelector('#btn-close-scanner');
@@ -112,7 +385,7 @@ export class StudentDashboardApp {
       });
     }
 
-    // 3. Scan QR from Image file fallback
+    // 5. Scan QR from Image file fallback
     if (fileQrInput) {
       fileQrInput.addEventListener('change', async (e) => {
         const file = e.target.files?.[0];
@@ -198,6 +471,8 @@ export class StudentDashboardApp {
     }
   }
 
+
+
   stopCameraStream() {
     if (this.qrScanner) {
       this.qrScanner.stop().catch(() => {});
@@ -210,3 +485,4 @@ export const renderStudentDashboard = async (container) => {
   const app = new StudentDashboardApp(container);
   await app.init();
 };
+

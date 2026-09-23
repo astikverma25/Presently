@@ -282,6 +282,32 @@ export class AdminDashboardApp {
       });
     }
 
+    // 2.1 Reset Student Bound Device Action
+    this.container.querySelectorAll('.btn-reset-student-device').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const studentId = btn.getAttribute('data-student-id');
+        const studentName = btn.getAttribute('data-student-name') || 'Student';
+
+        const confirmed = confirm(`Are you sure you want to reset the bound device for "${studentName}"?\n\nThis will allow the student to register their new phone on their next login.`);
+        if (!confirmed) return;
+
+        btn.disabled = true;
+        btn.textContent = 'Resetting...';
+
+        try {
+          await AdminService.resetStudentDevice(studentId);
+          alert(`Device binding for "${studentName}" has been reset successfully! The student can now log in and bind a new device.`);
+          await this.refreshData();
+          await this.render();
+        } catch (err) {
+          alert(`Failed to reset device binding: ${err.message || 'Database error'}`);
+          btn.disabled = false;
+          btn.textContent = '🔄 Reset Device';
+        }
+      });
+    });
+
     // 3. Add Faculty Form
     const facultyForm = this.container.querySelector('#form-add-faculty');
     if (facultyForm) {
@@ -351,9 +377,169 @@ export class AdminDashboardApp {
       });
     }
 
-    // 6. Assign Lecture Form with Multi-Slot Weekly Scheduler
+    // 6. Assign Lecture Form with Multi-Slot Weekly Scheduler & Toggle
+    const toggleAssignBtn = this.container.querySelector('#btn-toggle-assign-form');
+    const assignFormContainer = this.container.querySelector('#assign-form-container');
+    const cancelAssignBtn = this.container.querySelector('#btn-cancel-assign-form');
+
+    const toggleAssignForm = (show) => {
+      if (!assignFormContainer) return;
+      const isCurrentlyHidden = assignFormContainer.style.display === 'none' || assignFormContainer.classList.contains('hidden');
+      const shouldShow = show !== undefined ? show : isCurrentlyHidden;
+
+      if (shouldShow) {
+        assignFormContainer.style.display = 'block';
+        assignFormContainer.classList.remove('hidden');
+        if (toggleAssignBtn) {
+          toggleAssignBtn.style.background = '#FFF1F2';
+          toggleAssignBtn.style.color = '#E11D48';
+          toggleAssignBtn.style.borderColor = '#FECDD3';
+          toggleAssignBtn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            <span>Close</span>
+          `;
+        }
+      } else {
+        assignFormContainer.style.display = 'none';
+        assignFormContainer.classList.add('hidden');
+        if (toggleAssignBtn) {
+          toggleAssignBtn.style.background = '#EEF2FF';
+          toggleAssignBtn.style.color = '#4338CA';
+          toggleAssignBtn.style.borderColor = '#C7D2FE';
+          toggleAssignBtn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>Open</span>
+          `;
+        }
+      }
+    };
+
+    if (toggleAssignBtn) {
+      toggleAssignBtn.addEventListener('click', () => toggleAssignForm());
+    }
+    if (cancelAssignBtn) {
+      cancelAssignBtn.addEventListener('click', () => toggleAssignForm(false));
+    }
+
+    // Active Lecture Assignments Filters (Faculty, Date, Class/Section)
+    const filterFacultySelect = this.container.querySelector('#filter-assignment-faculty');
+    const filterDateInput = this.container.querySelector('#filter-assignment-date');
+    const filterSectionSelect = this.container.querySelector('#filter-assignment-section');
+    const resetAssignFiltersBtn = this.container.querySelector('#btn-reset-assignment-filters');
+    const assignmentRows = this.container.querySelectorAll('.assignment-table-row');
+    const visibleAssignCountElem = this.container.querySelector('#visible-assignments-count');
+    const noAssignMatchesRow = this.container.querySelector('#row-no-assignment-matches');
+
+    const applyAssignmentFilters = () => {
+      const selectedFaculty = filterFacultySelect ? filterFacultySelect.value : 'all';
+      const selectedDate = filterDateInput ? filterDateInput.value : '';
+      const selectedSection = filterSectionSelect ? filterSectionSelect.value : 'all';
+
+      let matchCount = 0;
+      assignmentRows.forEach(row => {
+        const rowFacultyId = row.getAttribute('data-faculty-id') || '';
+        const rowDate = row.getAttribute('data-lec-date') || '';
+        const rowSectionId = row.getAttribute('data-section-id') || '';
+
+        const matchFaculty = (selectedFaculty === 'all') || (rowFacultyId === selectedFaculty);
+        const matchDate = !selectedDate || (rowDate === selectedDate);
+        const matchSection = (selectedSection === 'all') || (rowSectionId === selectedSection);
+
+        if (matchFaculty && matchDate && matchSection) {
+          row.style.display = '';
+          matchCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      if (visibleAssignCountElem) {
+        visibleAssignCountElem.textContent = matchCount;
+      }
+      if (noAssignMatchesRow) {
+        noAssignMatchesRow.style.display = (matchCount === 0 && assignmentRows.length > 0) ? '' : 'none';
+      }
+    };
+
+    if (filterFacultySelect) filterFacultySelect.addEventListener('change', applyAssignmentFilters);
+    if (filterDateInput) filterDateInput.addEventListener('input', applyAssignmentFilters);
+    if (filterSectionSelect) filterSectionSelect.addEventListener('change', applyAssignmentFilters);
+    if (resetAssignFiltersBtn) {
+      resetAssignFiltersBtn.addEventListener('click', () => {
+        if (filterFacultySelect) filterFacultySelect.value = 'all';
+        if (filterDateInput) filterDateInput.value = '';
+        if (filterSectionSelect) filterSectionSelect.value = 'all';
+        applyAssignmentFilters();
+      });
+    }
+
     const assignForm = this.container.querySelector('#form-assign-class');
     if (assignForm) {
+      const semesterSelect = assignForm.querySelector('#assign-semester-select');
+      const sectionSelect = assignForm.querySelector('#assign-section-select');
+      const subjectSelect = assignForm.querySelector('#assign-subject-select');
+
+      const isSemMatch = (a, b) => {
+        if (a === null || a === undefined || b === null || b === undefined) return false;
+        const numA = parseInt(String(a).replace(/[^0-9]/g, ''), 10);
+        const numB = parseInt(String(b).replace(/[^0-9]/g, ''), 10);
+        if (!isNaN(numA) && !isNaN(numB)) return numA === numB;
+        return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+      };
+
+      const updateDependentDropdowns = (selectedSemester) => {
+        if (!selectedSemester) {
+          if (sectionSelect) {
+            sectionSelect.innerHTML = '<option value="" disabled selected>← Choose Semester first</option>';
+            sectionSelect.disabled = true;
+          }
+          if (subjectSelect) {
+            subjectSelect.innerHTML = '<option value="" disabled selected>← Choose Semester first</option>';
+            subjectSelect.disabled = true;
+          }
+          return;
+        }
+
+        // 1. Filter Sections
+        const filteredSections = (this.sections || []).filter(sec => isSemMatch(sec.semester, selectedSemester));
+        if (sectionSelect) {
+          if (filteredSections.length > 0) {
+            sectionSelect.innerHTML = `<option value="" disabled selected>Select Classroom / Section (${selectedSemester} Sem)...</option>` +
+              filteredSections.map(sec => `
+                <option value="${sec.id}">${sec.section_name || sec.sectionName} (${sec.branch || 'CSE'})</option>
+              `).join('');
+            sectionSelect.disabled = false;
+          } else {
+            sectionSelect.innerHTML = `<option value="" disabled selected>No classrooms found for ${selectedSemester} Sem (Add in Sections tab)</option>`;
+            sectionSelect.disabled = true;
+          }
+        }
+
+        // 2. Filter Subjects
+        const filteredSubjects = (this.subjects || []).filter(s => isSemMatch(s.semester, selectedSemester));
+        if (subjectSelect) {
+          if (filteredSubjects.length > 0) {
+            subjectSelect.innerHTML = `<option value="" disabled selected>Select Lecture / Subject (${selectedSemester} Sem)...</option>` +
+              filteredSubjects.map(s => `
+                <option value="${s.id}">${s.subject_name || s.subjectName} (${s.subject_code || s.subjectCode})</option>
+              `).join('');
+            subjectSelect.disabled = false;
+          } else {
+            subjectSelect.innerHTML = `<option value="" disabled selected>No subjects found for ${selectedSemester} Sem (Add in Subjects tab)</option>`;
+            subjectSelect.disabled = true;
+          }
+        }
+      };
+
+      if (semesterSelect) {
+        semesterSelect.addEventListener('change', (e) => {
+          updateDependentDropdowns(e.target.value);
+        });
+        if (semesterSelect.value) {
+          updateDependentDropdowns(semesterSelect.value);
+        }
+      }
+
       const slotsContainer = assignForm.querySelector('#lecture-slots-container');
       const addSlotBtn = assignForm.querySelector('#btn-add-slot');
       const clearSlotsBtn = assignForm.querySelector('#btn-clear-slots');
@@ -630,9 +816,9 @@ export class AdminDashboardApp {
         const a = this.assignments.find(item => item.id === assignmentId);
         if (!a || !editModal) return;
 
-        const subjectName = a.section_subject?.subject?.subject_name || a.subjectName || 'Course';
-        const subjectCode = a.section_subject?.subject?.subject_code || a.subjectCode || '';
-        const sectionName = a.section_subject?.section?.section_name || a.sectionName || 'Class';
+        const subjectName = a.subject?.subject_name || a.section_subject?.subject?.subject_name || a.subjectName || 'Course';
+        const subjectCode = a.subject?.subject_code || a.section_subject?.subject?.subject_code || a.subjectCode || '';
+        const sectionName = a.section?.section_name || a.section_subject?.section?.section_name || a.sectionName || 'Class';
         const lecId = a.lec_id || `LEC-${(a.id || '').slice(0, 6).toUpperCase()}`;
 
         // Populate modal fields
@@ -651,7 +837,7 @@ export class AdminDashboardApp {
         if (editLecDateInput) {
           editLecDateInput.value = a.lec_date || getLocalDateString();
           const d = new Date(editLecDateInput.value + 'T00:00:00');
-          if (editDayBadge) editDayBadge.textContent = isNaN(d.getDay()) ? (a.day_of_week || 'Day') : fullDaysArr[d.getDay()];
+          if (editDayBadge) editDayBadge.textContent = isNaN(d.getDay()) ? 'Day' : fullDaysArr[d.getDay()];
         }
         if (startTimeInput) startTimeInput.value = a.start_time || '10:00:00';
         if (endTimeInput) endTimeInput.value = a.end_time || '11:00:00';
@@ -721,8 +907,8 @@ export class AdminDashboardApp {
         if (!a || !deleteModal) return;
 
         const lecId = a.lec_id || `LEC-${(a.id || '').slice(0, 6).toUpperCase()}`;
-        const subjectName = a.section_subject?.subject?.subject_name || a.subjectName || 'this subject';
-        const sectionName = a.section_subject?.section?.section_name || a.sectionName || '';
+        const subjectName = a.subject?.subject_name || a.section_subject?.subject?.subject_name || a.subjectName || 'this subject';
+        const sectionName = a.section?.section_name || a.section_subject?.section?.section_name || a.sectionName || '';
 
         if (deleteIdInput) deleteIdInput.value = a.id;
         if (deleteMsg) {

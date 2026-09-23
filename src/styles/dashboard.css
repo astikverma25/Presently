@@ -1552,6 +1552,239 @@ body.dashboard-body {
   border: 1px solid #FECACA;
 }
 
+/* ==========================================================================
+   Faculty Dashboard: Date Selector Strip & My Lectures Tab Styles
+   ========================================================================== */
+
+/* 1. Date Selector & Filter Strip */
+.lectures-filter-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 6px 8px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.strip-filter-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.filter-pill {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #64748B;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.filter-pill:hover {
+  background: #EEF2FF;
+  color: #4338CA;
+}
+
+.filter-pill.active {
+  background: #4338CA;
+  color: #FFFFFF;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(67, 56, 202, 0.28);
+}
+
+/* 2. Date Picker Selector Button */
+.strip-date-selector {
+  display: flex;
+  align-items: center;
+}
+
+.date-picker-trigger-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.hidden-native-date-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.btn-strip-date-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  color: #334155;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.18s ease;
+  user-select: none;
+}
+
+.btn-strip-date-picker:hover {
+  background: #F1F5F9;
+  border-color: #94A3B8;
+  color: #0F172A;
+}
+
+.btn-strip-date-picker.active {
+  background: #EEF2FF;
+  border-color: #818CF8;
+  color: #3730A3;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
+}
+
+.btn-strip-date-picker svg {
+  color: #6366F1;
+  flex-shrink: 0;
+}
+
+.date-trigger-label {
+  font-size: 0.82rem;
+  letter-spacing: -0.01em;
+}
+
+/* 3. Dynamic Lecture Card Status Badges */
+.badge-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #DCFCE7;
+  color: #15803D;
+  border: 1px solid #86EFAC;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(22, 163, 74, 0.12);
+}
+
+.dot-live {
+  background: #16A34A !important;
+  box-shadow: 0 0 6px #22C55E;
+}
+
+.lecture-card.live-card {
+  background: #F0FDF4;
+  border-color: #86EFAC;
+}
+
+.lecture-card.live-card:hover {
+  border-color: #22C55E;
+  box-shadow: 0 4px 14px rgba(22, 163, 74, 0.12);
+}
+
+.badge-upcoming {
+  display: inline-flex;
+  align-items: center;
+  background: #EEF2FF;
+  color: #4338CA;
+  border: 1px solid #C7D2FE;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.badge-completed {
+  display: inline-flex;
+  align-items: center;
+  background: #F1F5F9;
+  color: #64748B;
+  border: 1px solid #E2E8F0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.lecture-card.completed-card {
+  opacity: 0.82;
+  background: #F8FAFC;
+}
+
+.lecture-card.completed-card:hover {
+  opacity: 1;
+  background: #FFFFFF;
+}
+
+/* 4. My Lectures Dedicated Tab */
+.my-lectures-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lecture-header-stats-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #DCFCE7;
+  color: #15803D;
+  border: 1px solid #BBF7D0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--dash-radius-full);
+}
+
+.lectures-count-pill {
+  background: #EEF2FF;
+  color: #4338CA;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: var(--dash-radius-full);
+  border: 1px solid #E0E7FF;
+}
+
+.lectures-schedule-card {
+  background: #FFFFFF;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--dash-radius-lg);
+  padding: 24px 28px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.schedule-strip-container {
+  border-bottom: 1px solid #F1F5F9;
+  padding-bottom: 16px;
+}
+
+.schedule-list-area {
+  min-height: 200px;
+}
+
 /* Responsive adjustments */
 @media (max-width: 1024px) {
   .dashboard-columns-grid, .qr-live-workspace-grid {
@@ -1572,4 +1805,17 @@ body.dashboard-body {
   .kpi-cards-grid {
     grid-template-columns: 1fr;
   }
+  .lectures-filter-strip {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .strip-filter-pills {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .strip-date-selector {
+    justify-content: flex-start;
+  }
 }
+

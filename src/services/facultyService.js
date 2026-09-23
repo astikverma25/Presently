@@ -1,6 +1,12 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { AuthService } from './authService.js';
-import { getLocalDateString, formatLocalDate } from '../utils/dateUtils.js';
+import { 
+  getIndianDateString, 
+  getIndianTimeVal, 
+  getIndianDayName, 
+  formatIndianDate, 
+  formatIndianTime 
+} from '../utils/dateUtils.js';
 
 /**
  * Service to manage 100% Real Faculty Data & Assigned Lectures on Supabase
@@ -57,10 +63,10 @@ export class FacultyService {
   }
 
   /**
-   * 2. Get Today's Assigned Lectures for Faculty
-   * Formats dates with exact local timezone (IST) and sorts today's lectures to the top
+  /**
+   * 2. Get All Raw Assigned Lectures for Faculty
    */
-  static async getTodayLectures(facultyId) {
+  static async getAllAssignments(facultyId) {
     try {
       let query = supabase
         .from('faculty_assignment')
@@ -69,15 +75,14 @@ export class FacultyService {
           lec_id,
           lec_date,
           status,
-          day_of_week,
           start_time,
           end_time,
           room_no,
-          section_subject:section_subject_id (
-            id,
-            subject:subject_id (id, subject_name, subject_code),
-            section:section_id (id, section_name, branch, semester, total_students)
-          )
+          subject_id,
+          section_id,
+          faculty_id,
+          subject:subject_id (id, subject_name, subject_code),
+          section:section_id (id, section_name, branch, semester, total_students)
         `);
 
       if (facultyId) {
@@ -87,24 +92,18 @@ export class FacultyService {
       const { data, error } = await query;
 
       if (error) {
-        console.error('Error fetching today lectures:', error.message);
+        console.error('Error fetching faculty assignments:', error.message);
         return [];
       }
 
-      const todayDate = getLocalDateString();
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const todayDay = days[new Date().getDay()];
-
       const rawList = await Promise.all((data || []).map(async (a) => {
-        const secSub = Array.isArray(a.section_subject) ? a.section_subject[0] : a.section_subject;
-        const subObj = Array.isArray(secSub?.subject) ? secSub?.subject[0] : secSub?.subject;
-        const secObj = Array.isArray(secSub?.section) ? secSub?.section[0] : secSub?.section;
+        const subObj = a.subject;
+        const secObj = a.section;
 
         const subject = subObj?.subject_name || 'Lecture';
         const section = secObj?.section_name || 'General';
-        const sectionId = secObj?.id;
+        const sectionId = a.section_id || secObj?.id;
 
-        // Query real enrolled student count in students table for this section
         let count = 0;
         if (sectionId) {
           const { count: enrolledCount } = await supabase
@@ -120,65 +119,265 @@ export class FacultyService {
         const startTime = a.start_time ? a.start_time.slice(0, 5) : '10:00';
         const endTime = a.end_time ? a.end_time.slice(0, 5) : '11:00';
         const room = a.room_no || 'Room 201';
-        const isToday = (a.lec_date === todayDate) || (a.day_of_week && a.day_of_week.toLowerCase() === todayDay.toLowerCase());
-        
-        const formattedDate = isToday ? formatLocalDate(todayDate) : formatLocalDate(a.lec_date);
-        const dayShort = a.day_of_week ? a.day_of_week.slice(0, 3) : '';
-        const shortDate = isToday ? `Today, ${formattedDate}` : `${dayShort ? `${dayShort}, ` : ''}${formattedDate}`;
         const lecId = a.lec_id || subObj?.subject_code || `LEC-${(a.id || '').slice(0, 4).toUpperCase()}`;
+        const lecDate = a.lec_date || getIndianDateString();
+        const dayOfWeek = getIndianDayName(lecDate);
 
         return {
           id: a.id,
           lecId: lecId,
-          lecDate: isToday ? todayDate : (a.lec_date || todayDate),
-          shortDate: shortDate,
+          rawLecDate: a.lec_date || null,
+          lecDate: lecDate,
           className: subject,
           section: section,
-          dayOfWeek: a.day_of_week,
+          dayOfWeek: dayOfWeek,
           time: `${startTime} - ${endTime}`,
           room: room,
           studentsCount: count,
-          isToday: isToday,
           startTimeVal: startTime,
+          endTimeVal: endTime,
           assignmentStatus: a.status || 'scheduled',
-          sectionSubjectId: secSub?.id
+          subjectId: a.subject_id || subObj?.id,
+          sectionId: sectionId,
+          sectionSubjectId: a.section_subject_id || a.id
         };
       }));
 
-      // Sort: Today's lectures first (by start time), then other days
-      rawList.sort((a, b) => {
-        if (a.isToday && !b.isToday) return -1;
-        if (!a.isToday && b.isToday) return 1;
-        return (a.startTimeVal || '').localeCompare(b.startTimeVal || '');
-      });
+      return rawList;
+    } catch (err) {
+      console.error('getAllAssignments error:', err);
+      return [];
+    }
+  }
 
-      // Assign badge text dynamically based on today's schedule
-      let firstTodayFound = false;
-      return rawList.map((l) => {
-        let badgeText = l.dayOfWeek || 'Scheduled';
-        let status = 'scheduled';
+  /**
+   * Filter and arrange lectures based on date strip & filter selection
+   * Arranges current to upcoming. Past lectures hidden on 'today' until date/yesterday chosen.
+   */
+  static filterAndSortLectures(rawList = [], filterType = 'today', targetDate = null) {
+    const todayStr = getIndianDateString();
+    const now = new Date();
+    const currentTimeVal = getIndianTimeVal();
 
-        if (l.isToday) {
-          if (!firstTodayFound) {
-            badgeText = 'Starting Soon';
-            status = 'starting_soon';
-            firstTodayFound = true;
-          } else {
-            badgeText = 'Today';
-            status = 'scheduled';
-          }
+    if (filterType === 'today') {
+      const todayMatches = rawList.filter(l => l.rawLecDate === todayStr);
+
+      const categorized = todayMatches.map(l => {
+        const start = l.startTimeVal || '00:00';
+        const end = l.endTimeVal || '23:59';
+        
+        const isPast = currentTimeVal > end;
+        const isLive = currentTimeVal >= start && currentTimeVal <= end;
+        const isUpcoming = currentTimeVal < start;
+
+        let status = 'upcoming';
+        let badgeText = 'Upcoming';
+
+        if (isLive) {
+          status = 'live';
+          badgeText = 'Live Now';
+        } else if (isPast) {
+          status = 'completed';
+          badgeText = 'Completed';
+        } else if (isUpcoming) {
+          status = 'upcoming';
+          badgeText = 'Upcoming';
         }
 
         return {
           ...l,
+          isPast,
+          isLive,
+          isUpcoming,
+          status,
+          badgeText,
+          shortDate: `Today, ${formatIndianDate(todayStr)}`
+        };
+      });
+
+      // Arrange: Live Now first, then upcoming chronologically, then completed chronologically
+      categorized.sort((a, b) => {
+        if (a.isLive && !b.isLive) return -1;
+        if (!a.isLive && b.isLive) return 1;
+        if (!a.isPast && b.isPast) return -1;
+        if (a.isPast && !b.isPast) return 1;
+        return (a.startTimeVal || '').localeCompare(b.startTimeVal || '');
+      });
+
+      const nextUpcoming = categorized.find(l => l.status === 'upcoming');
+      if (nextUpcoming && !categorized.some(l => l.status === 'live')) {
+        nextUpcoming.status = 'starting_soon';
+        nextUpcoming.badgeText = 'Starting Soon';
+      }
+
+      return categorized;
+    }
+
+    if (filterType === 'yesterday') {
+      const yesterdayObj = new Date(now);
+      yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+      const yesterdayStr = getIndianDateString(yesterdayObj);
+
+      const yMatches = rawList.filter(l => l.rawLecDate === yesterdayStr);
+
+      const formatted = yMatches.map(l => ({
+        ...l,
+        isPast: true,
+        status: 'completed',
+        badgeText: 'Completed',
+        shortDate: `Yesterday, ${formatIndianDate(yesterdayStr)}`
+      }));
+
+      formatted.sort((a, b) => (a.startTimeVal || '').localeCompare(b.startTimeVal || ''));
+      return formatted;
+    }
+
+    if (filterType === 'tomorrow') {
+      const tomorrowObj = new Date(now);
+      tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+      const tomorrowStr = getIndianDateString(tomorrowObj);
+
+      const tMatches = rawList.filter(l => l.rawLecDate === tomorrowStr);
+
+      const formatted = tMatches.map(l => ({
+        ...l,
+        isUpcoming: true,
+        status: 'upcoming',
+        badgeText: 'Upcoming',
+        shortDate: `Tomorrow, ${formatIndianDate(tomorrowStr)}`
+      }));
+
+      formatted.sort((a, b) => (a.startTimeVal || '').localeCompare(b.startTimeVal || ''));
+      return formatted;
+    }
+
+    if (filterType === 'this_week') {
+      const dayIdx = now.getDay();
+      const diffToMonday = (dayIdx === 0 ? -6 : 1) - dayIdx;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() + diffToMonday);
+
+      const weekDates = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const dStr = getIndianDateString(d);
+        weekDates.push({
+          dateStr: dStr,
+          dayName: getIndianDayName(d),
+          dayShort: getIndianDayName(d).slice(0, 3)
+        });
+      }
+
+      const weekLectures = [];
+      weekDates.forEach(({ dateStr, dayName, dayShort }) => {
+        const isToday = dateStr === todayStr;
+        const isPastDay = dateStr < todayStr;
+        
+        const dayMatches = rawList.filter(l => l.rawLecDate === dateStr);
+
+        dayMatches.forEach(l => {
+          let status = 'upcoming';
+          let badgeText = 'Upcoming';
+
+          if (isToday) {
+            const start = l.startTimeVal || '00:00';
+            const end = l.endTimeVal || '23:59';
+            if (currentTimeVal >= start && currentTimeVal <= end) {
+              status = 'live';
+              badgeText = 'Live Now';
+            } else if (currentTimeVal > end) {
+              status = 'completed';
+              badgeText = 'Completed';
+            } else {
+              status = 'upcoming';
+              badgeText = 'Upcoming';
+            }
+          } else if (isPastDay) {
+            status = 'completed';
+            badgeText = 'Completed';
+          }
+
+          weekLectures.push({
+            ...l,
+            lecDate: dateStr,
+            shortDate: isToday ? `Today, ${formatIndianDate(dateStr)}` : `${dayShort}, ${formatIndianDate(dateStr)}`,
+            status,
+            badgeText,
+            isPastDay,
+            isToday
+          });
+        });
+      });
+
+      weekLectures.sort((a, b) => {
+        const dateComp = (a.lecDate || '').localeCompare(b.lecDate || '');
+        if (dateComp !== 0) return dateComp;
+        return (a.startTimeVal || '').localeCompare(b.startTimeVal || '');
+      });
+
+      return weekLectures;
+    }
+
+    if (filterType === 'custom' || targetDate) {
+      const chosenDateStr = targetDate || todayStr;
+      const chosenDayName = getIndianDayName(chosenDateStr);
+      const isToday = chosenDateStr === todayStr;
+      const isPastDate = chosenDateStr < todayStr;
+
+      const dateMatches = rawList.filter(l => l.rawLecDate === chosenDateStr);
+
+      const formatted = dateMatches.map(l => {
+        let status = 'upcoming';
+        let badgeText = 'Upcoming';
+
+        if (isToday) {
+          const start = l.startTimeVal || '00:00';
+          const end = l.endTimeVal || '23:59';
+          if (currentTimeVal >= start && currentTimeVal <= end) {
+            status = 'live';
+            badgeText = 'Live Now';
+          } else if (currentTimeVal > end) {
+            status = 'completed';
+            badgeText = 'Completed';
+          } else {
+            status = 'upcoming';
+            badgeText = 'Upcoming';
+          }
+        } else if (isPastDate) {
+          status = 'completed';
+          badgeText = 'Completed';
+        }
+
+        return {
+          ...l,
+          lecDate: chosenDateStr,
+          shortDate: isToday ? `Today, ${formatIndianDate(chosenDateStr)}` : `${chosenDayName.slice(0, 3)}, ${formatIndianDate(chosenDateStr)}`,
           status,
           badgeText
         };
       });
-    } catch (err) {
-      console.error('getTodayLectures error:', err);
-      return [];
+
+      formatted.sort((a, b) => {
+        if (isToday) {
+          if (a.status === 'live' && b.status !== 'live') return -1;
+          if (a.status !== 'live' && b.status === 'live') return 1;
+        }
+        return (a.startTimeVal || '').localeCompare(b.startTimeVal || '');
+      });
+
+      return formatted;
     }
+
+    return rawList;
+  }
+
+  /**
+   * Get Today's Assigned Lectures for Faculty (convenience wrapper)
+   */
+  static async getTodayLectures(facultyId) {
+    const rawAssignments = await FacultyService.getAllAssignments(facultyId);
+    return FacultyService.filterAndSortLectures(rawAssignments, 'today');
   }
 
   /**
@@ -219,18 +418,13 @@ export class FacultyService {
   }
 
   /**
-  /**
    * 4. Get Real Section-wise Attendance Performance for Today's Lectures
    * Computes attendance percentage against total enrolled students in each section.
    * If a section has multiple lectures scheduled today, averages all of today's lectures.
    */
   static async getSectionAttendance(facultyId, date = null) {
     try {
-      const todayDate = date || getLocalDateString();
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const dateParts = todayDate.split('-').map(Number);
-      const parsedDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-      const currentDay = !isNaN(parsedDate.getTime()) ? days[parsedDate.getDay()] : days[new Date().getDay()];
+      const todayDate = date || getIndianDateString();
 
       // 1. Fetch all assignments belonging to this faculty member
       let assignQuery = supabase
@@ -239,14 +433,13 @@ export class FacultyService {
           id,
           lec_id,
           lec_date,
-          day_of_week,
           start_time,
           end_time,
-          section_subject:section_subject_id (
-            id,
-            subject:subject_id (id, subject_name, subject_code),
-            section:section_id (id, section_name, branch, semester, total_students)
-          )
+          subject_id,
+          section_id,
+          faculty_id,
+          subject:subject_id (id, subject_name, subject_code),
+          section:section_id (id, section_name, branch, semester, total_students)
         `);
 
       if (facultyId) {
@@ -262,9 +455,8 @@ export class FacultyService {
       // 2. Group assignments by unique section
       const assignedSectionsMap = new Map();
       assignments.forEach(a => {
-        const secSub = Array.isArray(a.section_subject) ? a.section_subject[0] : a.section_subject;
-        const sec = Array.isArray(secSub?.section) ? secSub?.section[0] : secSub?.section;
-        const sub = Array.isArray(secSub?.subject) ? secSub?.subject[0] : secSub?.subject;
+        const sec = a.section;
+        const sub = a.subject;
 
         if (sec && sec.id) {
           if (!assignedSectionsMap.has(sec.id)) {
@@ -298,12 +490,8 @@ export class FacultyService {
 
           const totalSectionPool = realStudentsCount || sec.totalStudents || 1;
 
-          // B. Identify today's lectures for this section
-          const scheduledTodayAssignments = sec.assignments.filter(a => {
-            const dateMatch = a.lec_date === todayDate;
-            const dayMatch = a.day_of_week && a.day_of_week.toLowerCase() === currentDay.toLowerCase();
-            return dateMatch || dayMatch;
-          });
+          // B. Identify today's lectures for this section by lec_date
+          const scheduledTodayAssignments = sec.assignments.filter(a => a.lec_date === todayDate);
 
           // Use scheduled today assignments; if none explicitly scheduled for this day, fallback to all assigned
           const targetAssignments = scheduledTodayAssignments.length > 0 
@@ -313,12 +501,11 @@ export class FacultyService {
           // C. Calculate attendance percentage for each lecture today
           const lecturePercentages = await Promise.all(
             targetAssignments.map(async (assign) => {
-              // Gather session IDs conducted today for this assignment
+              // Gather session IDs conducted for this assignment
               const { data: todaySessions } = await supabase
                 .from('attendance_sessions')
                 .select('id')
-                .eq('faculty_assignment_id', assign.id)
-                .eq('date', todayDate);
+                .eq('faculty_assignment_id', assign.id);
 
               const sessionIds = (todaySessions || []).map(s => s.id);
 
@@ -404,16 +591,13 @@ export class FacultyService {
         .from('attendance_sessions')
         .select(`
           id,
-          date,
           status,
           started_at,
           ended_at,
-          faculty_assignment (
+          faculty_assignment:faculty_assignment_id (
             room_no,
-            section_subject:section_subject_id (
-              subject:subject_id (subject_name),
-              section:section_id (section_name)
-            )
+            subject:subject_id (subject_name),
+            section:section_id (section_name)
           )
         `)
         .order('started_at', { ascending: false })
@@ -424,8 +608,9 @@ export class FacultyService {
       }
 
       return sessions.map(s => {
-        const subject = s.faculty_assignment?.section_subject?.subject?.subject_name || 'Lecture';
-        const section = s.faculty_assignment?.section_subject?.section?.section_name || '';
+        const fa = s.faculty_assignment;
+        const subject = fa?.subject?.subject_name || 'Lecture';
+        const section = fa?.section?.section_name || '';
         const isCompleted = s.status === 'completed';
         const timeAgo = s.started_at ? new Date(s.started_at).toLocaleDateString() : 'Today';
 

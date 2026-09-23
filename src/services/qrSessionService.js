@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient.js';
-import { getLocalDateString } from '../utils/dateUtils.js';
+import { getIndianDateString, formatIndianTime } from '../utils/dateUtils.js';
 
 /**
  * Service to manage active QR Attendance Sessions & Realtime Streams on Supabase
@@ -35,7 +35,7 @@ export class QRSessionService {
   }
 
   /**
-   * 2. Start a new live attendance session in database
+   * 2. Start or Reactivate a live attendance session in database
    */
   static async startSession(facultyAssignmentId, expirySeconds = 15) {
     try {
@@ -51,12 +51,44 @@ export class QRSessionService {
       }
 
       if (assignId) {
+        // Mark assignment status as ongoing
+        await supabase
+          .from('faculty_assignment')
+          .update({ status: 'ongoing' })
+          .eq('id', assignId);
+
+        // Check if a session already exists for this assignment (re-start scenario: reuse & reactivate existing session)
+        const { data: existingSessions } = await supabase
+          .from('attendance_sessions')
+          .select('*')
+          .eq('faculty_assignment_id', assignId)
+          .order('started_at', { ascending: false })
+          .limit(1);
+
+        if (existingSessions && existingSessions.length > 0) {
+          const existing = existingSessions[0];
+          const { data: reactivatedSession, error: reactivateErr } = await supabase
+            .from('attendance_sessions')
+            .update({
+              status: 'active',
+              qr_expiry_sec: expirySeconds,
+              ended_at: null
+            })
+            .eq('id', existing.id)
+            .select()
+            .single();
+
+          if (!reactivateErr && reactivatedSession) {
+            return reactivatedSession;
+          }
+        }
+
+        // Otherwise insert new session row
         const { data: newSession, error } = await supabase
           .from('attendance_sessions')
           .insert([
             {
               faculty_assignment_id: assignId,
-              date: getLocalDateString(),
               qr_expiry_sec: expirySeconds,
               status: 'active',
               started_at: new Date().toISOString()
@@ -70,7 +102,7 @@ export class QRSessionService {
         }
       }
     } catch (err) {
-      console.warn('Could not insert session row:', err.message);
+      console.warn('Could not start/reactivate session:', err.message);
     }
 
     return {
@@ -91,7 +123,7 @@ export class QRSessionService {
       }
 
       const cleanSection = sectionName ? (sectionName.includes('-') ? sectionName.split('-')[1].trim() : sectionName.trim()) : '';
-      const targetDate = date || getLocalDateString();
+      const targetDate = date || getIndianDateString();
       
       let sectionId = null;
       if (cleanSection) {
@@ -108,16 +140,11 @@ export class QRSessionService {
       if (!sectionId && assignmentId) {
         const { data: assignData } = await supabase
           .from('faculty_assignment')
-          .select(`
-            section_subject:section_subject_id (
-              section_id
-            )
-          `)
+          .select('section_id')
           .eq('id', assignmentId)
           .maybeSingle();
         
-        const secSub = Array.isArray(assignData?.section_subject) ? assignData.section_subject[0] : assignData?.section_subject;
-        sectionId = secSub?.section_id;
+        sectionId = assignData?.section_id;
       }
 
       let studentsQuery = supabase
@@ -135,7 +162,7 @@ export class QRSessionService {
         return [];
       }
 
-      // 1. Gather all active / previous session IDs for this assignment on targetDate
+      // 1. Gather all active / previous session IDs for this assignment
       const markedMap = new Map();
       const sessionIds = [];
 
@@ -147,8 +174,7 @@ export class QRSessionService {
         const { data: relatedSessions } = await supabase
           .from('attendance_sessions')
           .select('id')
-          .eq('faculty_assignment_id', assignmentId)
-          .eq('date', targetDate);
+          .eq('faculty_assignment_id', assignmentId);
 
         (relatedSessions || []).forEach(s => {
           if (!sessionIds.includes(s.id)) {
@@ -213,7 +239,7 @@ export class QRSessionService {
           initials: initials,
           colorClass: colorClasses[idx % colorClasses.length],
           rawMarkedAt: markedTimestamp ? new Date(markedTimestamp).getTime() : 0,
-          markedTime: isMarked ? (markedTimestamp ? new Date(markedTimestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'Verified') : null
+          markedTime: isMarked ? (markedTimestamp ? formatIndianTime(markedTimestamp) : 'Verified') : null
         };
       });
 
@@ -237,26 +263,132 @@ export class QRSessionService {
   }
 
   /**
-   * 4. Submits and closes an active attendance session
+   * 4. Submits and closes an active attendance session:
+   * - Marks attendance_sessions as completed
+   * - Marks faculty_assignment status as completed
+   * - Automatically marks all unscanned/unmarked students in the section as 'absent'
    */
-  static async closeSession(sessionId, summaryData) {
+  static async closeSession(sessionId, summaryData = {}) {
     try {
-      if (sessionId && !sessionId.startsWith('sess-')) {
+      const assignmentId = summaryData?.assignmentId;
+      const validSessionId = (sessionId && !sessionId.startsWith('sess-')) ? sessionId : null;
+
+      // 1. Mark attendance_sessions as 'completed'
+      if (validSessionId) {
         await supabase
           .from('attendance_sessions')
           .update({
             status: 'completed',
             ended_at: new Date().toISOString()
           })
-          .eq('id', sessionId);
+          .eq('id', validSessionId);
+      }
+
+      // 2. Mark faculty_assignment as 'completed' from 'scheduled'
+      if (assignmentId) {
+        await supabase
+          .from('faculty_assignment')
+          .update({
+            status: 'completed'
+          })
+          .eq('id', assignmentId);
+      }
+
+      // 3. Resolve section ID
+      let sectionId = summaryData?.sectionId;
+      if (!sectionId && assignmentId) {
+        const { data: faData } = await supabase
+          .from('faculty_assignment')
+          .select('section_id, lec_id, lec_date')
+          .eq('id', assignmentId)
+          .maybeSingle();
+        sectionId = faData?.section_id;
+        if (!summaryData.lecId) summaryData.lecId = faData?.lec_id;
+        if (!summaryData.lectureDate) summaryData.lectureDate = faData?.lec_date;
+      }
+
+      if (!sectionId && summaryData?.section) {
+        const cleanSection = summaryData.section.includes('-') 
+          ? summaryData.section.split('-')[1].trim() 
+          : summaryData.section.trim();
+        const { data: secData } = await supabase
+          .from('sections')
+          .select('id')
+          .ilike('section_name', `%${cleanSection}%`)
+          .limit(1)
+          .maybeSingle();
+        sectionId = secData?.id;
+      }
+
+      // 4. Find all enrolled students in this section
+      if (sectionId) {
+        const { data: enrolledStudents } = await supabase
+          .from('students')
+          .select('id, name, roll_no')
+          .eq('section_id', sectionId);
+
+        if (enrolledStudents && enrolledStudents.length > 0) {
+          // Fetch all existing attendance records for this assignment / session
+          let existingQuery = supabase.from('attendance_records').select('id, student_id, session_id, faculty_assignment_id, status');
+          if (assignmentId) {
+            existingQuery = existingQuery.eq('faculty_assignment_id', assignmentId);
+          } else if (validSessionId) {
+            existingQuery = existingQuery.eq('session_id', validSessionId);
+          }
+
+          const { data: existingRecords } = await existingQuery;
+          const existingMap = new Map();
+          (existingRecords || []).forEach(r => {
+            existingMap.set(r.student_id, r);
+          });
+
+          // Find all students who already scanned / were marked present
+          const presentStudentIds = new Set();
+          (existingRecords || []).forEach(r => {
+            if ((r.status || '').toLowerCase() === 'present') {
+              presentStudentIds.add(r.student_id);
+            }
+          });
+
+          // Filter out students who were NOT present -> mark as absent
+          const absentStudents = enrolledStudents.filter(s => !presentStudentIds.has(s.id));
+
+          if (absentStudents.length > 0) {
+            const targetDate = summaryData.lectureDate || getIndianDateString();
+            const absentRecords = absentStudents.map(s => {
+              const existingRec = existingMap.get(s.id);
+              const row = {
+                session_id: validSessionId || existingRec?.session_id || null,
+                faculty_assignment_id: assignmentId || existingRec?.faculty_assignment_id || null,
+                student_id: s.id,
+                lec_id: summaryData.lecId || null,
+                lecture_date: targetDate,
+                status: 'absent',
+                marked_at: null,
+                verification_method: 'system_auto'
+              };
+
+              if (existingRec?.id) {
+                row.id = existingRec.id; // Primary key match => PostgreSQL updates existing row in-place!
+              }
+
+              return row;
+            });
+
+            // Safe in-place upsert
+            await supabase
+              .from('attendance_records')
+              .upsert(absentRecords);
+          }
+        }
       }
     } catch (err) {
-      console.warn('Error closing session in database:', err);
+      console.warn('Error completing session in database:', err);
     }
 
     return {
       success: true,
-      message: 'Session completed and attendance saved to database',
+      message: 'Session completed, assignment status updated to completed, and absent students recorded successfully.',
       savedAt: new Date().toISOString()
     };
   }

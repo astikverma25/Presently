@@ -4,6 +4,7 @@ import { createDynamicQRPayload } from '../../utils/totpCrypto.js';
 import { renderFacultySidebar } from './FacultySidebar.js';
 import { renderFacultyTopbar } from './FacultyTopbar.js';
 import { renderFacultyOverview } from './FacultyOverview.js';
+import { renderFacultyLecturesView } from './FacultyLecturesView.js';
 import { renderFacultyQRSession } from './FacultyQRSession.js';
 import { renderStudentStreamItem } from './StudentStreamItem.js';
 import { renderFacultyAttendanceRecord } from './FacultyAttendanceRecord.js';
@@ -21,7 +22,10 @@ export class FacultyDashboardApp {
     this.currentTab = 'overview'; // 'overview' | 'my-lectures' | 'students' | 'qr-sessions' | 'attendance' | 'reports' | 'settings'
     this.profile = null;
     this.kpis = null;
+    this.rawAssignments = [];
     this.lectures = [];
+    this.lectureFilter = 'today'; // 'yesterday' | 'today' | 'tomorrow' | 'this_week' | 'custom'
+    this.selectedLectureDate = getLocalDateString();
     this.sectionAttendance = [];
     this.activeLecture = {
       className: '',
@@ -58,7 +62,8 @@ export class FacultyDashboardApp {
 
     try {
       this.profile = await FacultyService.getProfile();
-      this.lectures = await FacultyService.getTodayLectures(this.profile?.id);
+      this.rawAssignments = await FacultyService.getAllAssignments(this.profile?.id);
+      this.lectures = FacultyService.filterAndSortLectures(this.rawAssignments, this.lectureFilter, this.selectedLectureDate);
       this.kpis = await FacultyService.getKPIs(this.profile?.id, this.lectures);
       this.sectionAttendance = await FacultyService.getSectionAttendance(this.profile?.id);
       this.activities = await FacultyService.getRecentActivities();
@@ -81,7 +86,11 @@ export class FacultyDashboardApp {
       return;
     }
 
-    const sectionLectures = this.lectures.filter(l => 
+    const dateLectures = (this.rawAssignments || []).filter(l => 
+      l.lecDate === this.currentAttendanceDate || l.rawLecDate === this.currentAttendanceDate
+    );
+
+    const sectionLectures = dateLectures.filter(l => 
       (l.section || '').toLowerCase() === this.currentAttendanceSection.toLowerCase()
     );
 
@@ -144,10 +153,23 @@ export class FacultyDashboardApp {
     clearInterval(this.qrTimerInterval);
     this.isSessionActive = false;
     await QRSessionService.closeSession(this.currentSessionId, {
-      className: this.activeLecture.className,
-      section: this.activeLecture.section
+      assignmentId: this.activeLecture?.id || null,
+      lecId: this.activeLecture?.lecId || null,
+      section: this.activeLecture?.section || '',
+      sectionId: this.activeLecture?.sectionId || null,
+      lectureDate: this.currentAttendanceDate || getLocalDateString(),
+      className: this.activeLecture?.className || ''
     });
-    alert(`Attendance session for ${this.activeLecture.className} - Sec ${this.activeLecture.section} submitted and saved to database!`);
+
+    // Update assignment status locally
+    if (this.activeLecture?.id && this.rawAssignments) {
+      const targetAssign = this.rawAssignments.find(a => a.id === this.activeLecture.id);
+      if (targetAssign) {
+        targetAssign.status = 'completed';
+      }
+    }
+
+    alert(`Attendance session for ${this.activeLecture.className || 'Lecture'} - Sec ${this.activeLecture.section || ''} submitted and saved to database! All unscanned students have been marked absent.`);
     this.currentAttendanceSection = this.activeLecture.section || '2A';
     this.currentAttendanceLectureId = this.activeLecture.id || '';
     this.currentTab = 'attendance';
@@ -158,8 +180,30 @@ export class FacultyDashboardApp {
   async render() {
     let mainViewHTML = '';
 
-    if (this.currentTab === 'overview' || this.currentTab === 'my-lectures') {
-      mainViewHTML = await renderFacultyOverview(this.lectures, this.sectionAttendance, this.kpis, this.activities);
+    if (this.currentTab === 'overview') {
+      const todayLectures = FacultyService.filterAndSortLectures(
+        this.rawAssignments, 
+        'today', 
+        getLocalDateString()
+      );
+      mainViewHTML = await renderFacultyOverview(
+        todayLectures, 
+        this.sectionAttendance, 
+        this.kpis, 
+        this.activities
+      );
+    } else if (this.currentTab === 'my-lectures') {
+      this.lectures = FacultyService.filterAndSortLectures(
+        this.rawAssignments, 
+        this.lectureFilter, 
+        this.selectedLectureDate
+      );
+      mainViewHTML = renderFacultyLecturesView(
+        this.lectures, 
+        this.lectureFilter, 
+        this.selectedLectureDate, 
+        this.rawAssignments
+      );
     } else if (this.currentTab === 'qr-sessions') {
       if (this.activeLecture?.section && (!this.liveStudents || !this.liveStudents.length)) {
         this.liveStudents = await QRSessionService.getLiveSessionStudents(
@@ -173,7 +217,7 @@ export class FacultyDashboardApp {
       mainViewHTML = renderFacultyQRSession(
         this.activeLecture, 
         this.liveStudents, 
-        this.lectures, 
+        this.rawAssignments, 
         this.isSessionActive, 
         this.currentQrDataUrl,
         this.currentAttendanceDate
@@ -187,10 +231,20 @@ export class FacultyDashboardApp {
           date: this.currentAttendanceDate,
           unsavedCount: this.unsavedChangesCount
         },
-        this.lectures
+        this.rawAssignments
       );
     } else {
-      mainViewHTML = await renderFacultyOverview(this.lectures, this.sectionAttendance, this.kpis, this.activities);
+      const todayLectures = FacultyService.filterAndSortLectures(
+        this.rawAssignments, 
+        'today', 
+        getLocalDateString()
+      );
+      mainViewHTML = await renderFacultyOverview(
+        todayLectures, 
+        this.sectionAttendance, 
+        this.kpis, 
+        this.activities
+      );
     }
 
     this.container.innerHTML = `
@@ -282,17 +336,88 @@ export class FacultyDashboardApp {
     // 1. Sidebar Nav
     this.container.querySelectorAll('.sidebar-nav-item button').forEach(btn => {
       btn.addEventListener('click', async () => {
-        this.currentTab = btn.getAttribute('data-nav');
-        if (this.currentTab === 'overview' || this.currentTab === 'my-lectures') {
-          this.sectionAttendance = await FacultyService.getSectionAttendance(this.profile?.id);
-          this.kpis = await FacultyService.getKPIs(this.profile?.id, this.lectures);
-          this.activities = await FacultyService.getRecentActivities();
-        } else if (this.currentTab === 'attendance') {
+        const nextTab = btn.getAttribute('data-nav');
+        if (this.currentTab === nextTab) return;
+        this.currentTab = nextTab;
+
+        if (this.currentTab === 'my-lectures') {
+          this.lectures = FacultyService.filterAndSortLectures(
+            this.rawAssignments, 
+            this.lectureFilter, 
+            this.selectedLectureDate
+          );
+        } else if (this.currentTab === 'attendance' && this.currentAttendanceSection && !this.attendanceRecords.length) {
           await this.refreshAttendance();
         }
+
         await this.render();
       });
     });
+
+    // 2. Date Filter Strip Pills (Yesterday, Today, Tomorrow, This Week)
+    this.container.querySelectorAll('[data-lecture-filter]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const chosenFilter = btn.getAttribute('data-lecture-filter');
+        this.lectureFilter = chosenFilter;
+        
+        const now = new Date();
+        if (chosenFilter === 'today') {
+          this.selectedLectureDate = getLocalDateString(now);
+        } else if (chosenFilter === 'yesterday') {
+          const y = new Date(now);
+          y.setDate(y.getDate() - 1);
+          this.selectedLectureDate = getLocalDateString(y);
+        } else if (chosenFilter === 'tomorrow') {
+          const t = new Date(now);
+          t.setDate(t.getDate() + 1);
+          this.selectedLectureDate = getLocalDateString(t);
+        }
+
+        this.lectures = FacultyService.filterAndSortLectures(
+          this.rawAssignments, 
+          this.lectureFilter, 
+          this.selectedLectureDate
+        );
+        await this.render();
+      });
+    });
+
+    // 3. Date Picker Input & Trigger Button in Filter Strip
+    const dateInput = this.container.querySelector('#input-faculty-lecture-date');
+    const dateTriggerBtn = this.container.querySelector('#btn-trigger-lecture-date');
+
+    if (dateTriggerBtn && dateInput) {
+      dateTriggerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof dateInput.showPicker === 'function') {
+          dateInput.showPicker();
+        } else {
+          dateInput.click();
+        }
+      });
+
+      dateInput.addEventListener('change', async (e) => {
+        if (!e.target.value) return;
+        this.selectedLectureDate = e.target.value;
+        this.lectureFilter = 'custom';
+        this.lectures = FacultyService.filterAndSortLectures(
+          this.rawAssignments, 
+          this.lectureFilter, 
+          this.selectedLectureDate
+        );
+        await this.render();
+      });
+    }
+
+    // 4. View Schedule Button in Overview Panel
+    const viewScheduleBtn = this.container.querySelector('#btn-view-schedule');
+    if (viewScheduleBtn) {
+      viewScheduleBtn.addEventListener('click', async () => {
+        this.currentTab = 'my-lectures';
+        await this.render();
+      });
+    }
 
     const facultyLogoutBtn = this.container.querySelector('#btn-faculty-logout');
     if (facultyLogoutBtn) {
@@ -302,7 +427,7 @@ export class FacultyDashboardApp {
       });
     }
 
-    // 2. Overview: "Start attendance session" CTA
+    // 5. Overview: "Start attendance session" CTA
     const gotoQRBtn = this.container.querySelector('#btn-goto-qr-session');
     if (gotoQRBtn) {
       gotoQRBtn.addEventListener('click', async () => {
@@ -311,14 +436,15 @@ export class FacultyDashboardApp {
       });
     }
 
-    // 3. Overview: Lecture Cards Click
+    // 6. Overview & My Lectures: Lecture Cards Click
     this.container.querySelectorAll('.lecture-card').forEach(card => {
       card.addEventListener('click', async () => {
         const lName = card.getAttribute('data-class');
         const sName = card.getAttribute('data-section');
         const lId = card.getAttribute('data-lecture-id');
 
-        const matched = this.lectures.find(l => l.id === lId) || {
+        const matched = this.lectures.find(l => l.id === lId) || 
+                        this.rawAssignments.find(l => l.id === lId) || {
           id: lId,
           className: lName,
           section: sName,
@@ -382,16 +508,46 @@ export class FacultyDashboardApp {
     if (inputQrDate) {
       inputQrDate.addEventListener('change', async (e) => {
         this.currentAttendanceDate = e.target.value;
-        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const dateParts = this.currentAttendanceDate.split('-').map(Number);
-        const parsedDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-        const dayName = !isNaN(parsedDate.getTime()) ? dayNames[parsedDate.getDay()] : '';
-
-        const validOnDate = this.lectures.some(l => 
-          (l.id === this.activeLecture?.id) && (l.lecDate === this.currentAttendanceDate || (l.dayOfWeek && l.dayOfWeek.toLowerCase() === dayName.toLowerCase()))
+        const dateLectures = (this.rawAssignments || []).filter(l => 
+          l.lecDate === this.currentAttendanceDate || l.rawLecDate === this.currentAttendanceDate
         );
+        const availableSections = [...new Set(dateLectures.map(l => l.section).filter(Boolean))];
 
-        if (!validOnDate) {
+        const isCurrentSecValid = this.activeLecture?.section && availableSections.some(s => (s || '').toLowerCase() === (this.activeLecture.section || '').toLowerCase());
+
+        if (isCurrentSecValid) {
+          const secLectures = dateLectures.filter(l => (l.section || '').toLowerCase() === this.activeLecture.section.toLowerCase());
+          if (secLectures.length === 1) {
+            this.activeLecture = { ...secLectures[0], expirySeconds: this.activeLecture?.expirySeconds || 15 };
+          } else if (secLectures.some(l => l.id === this.activeLecture?.id)) {
+            const matched = secLectures.find(l => l.id === this.activeLecture.id);
+            this.activeLecture = { ...matched, expirySeconds: this.activeLecture?.expirySeconds || 15 };
+          } else {
+            this.activeLecture = {
+              className: '',
+              section: this.activeLecture.section,
+              room: '',
+              studentsCount: 0,
+              expirySeconds: this.activeLecture?.expirySeconds || 15,
+              id: null
+            };
+          }
+        } else if (availableSections.length === 1) {
+          const autoSec = availableSections[0];
+          const secLectures = dateLectures.filter(l => (l.section || '').toLowerCase() === autoSec.toLowerCase());
+          if (secLectures.length === 1) {
+            this.activeLecture = { ...secLectures[0], expirySeconds: this.activeLecture?.expirySeconds || 15 };
+          } else {
+            this.activeLecture = {
+              className: '',
+              section: autoSec,
+              room: '',
+              studentsCount: 0,
+              expirySeconds: this.activeLecture?.expirySeconds || 15,
+              id: null
+            };
+          }
+        } else {
           this.activeLecture = {
             className: '',
             section: '',
@@ -401,12 +557,13 @@ export class FacultyDashboardApp {
             id: null
           };
         }
+
         this.liveStudents = await QRSessionService.getLiveSessionStudents(
-          this.activeLecture.section, 
+          this.activeLecture?.section, 
           this.currentSessionId, 
-          this.activeLecture.id,
+          this.activeLecture?.id,
           this.currentAttendanceDate,
-          this.activeLecture.lecId
+          this.activeLecture?.lecId
         );
         await this.render();
       });
@@ -415,8 +572,11 @@ export class FacultyDashboardApp {
     if (selectQrSection) {
       selectQrSection.addEventListener('change', async (e) => {
         const chosenSec = e.target.value;
-        const sectionLectures = this.lectures.filter(l => 
-          (l.section || '').toLowerCase() === chosenSec.toLowerCase()
+        const dateLectures = (this.rawAssignments || []).filter(l => 
+          l.lecDate === this.currentAttendanceDate || l.rawLecDate === this.currentAttendanceDate
+        );
+        const sectionLectures = dateLectures.filter(l => 
+          (l.section || '').toLowerCase() === (chosenSec || '').toLowerCase()
         );
 
         if (sectionLectures.length === 1) {
@@ -445,7 +605,7 @@ export class FacultyDashboardApp {
     if (selectQrLecture) {
       selectQrLecture.addEventListener('change', async (e) => {
         const chosenLecId = e.target.value;
-        const matched = this.lectures.find(l => l.id === chosenLecId);
+        const matched = (this.rawAssignments || []).find(l => l.id === chosenLecId);
         if (matched) {
           this.activeLecture = { ...matched, expirySeconds: this.activeLecture?.expirySeconds || 15 };
           this.liveStudents = await QRSessionService.getLiveSessionStudents(
@@ -529,14 +689,17 @@ export class FacultyDashboardApp {
           saveBtn.textContent = 'Saving to Database...';
 
           try {
-            const matchedLecture = this.lectures.find(l => (l.section || '').toLowerCase() === (this.currentAttendanceSection || '').toLowerCase());
+            const allAssignments = this.rawAssignments || this.lectures || [];
+            const matchedLecture = allAssignments.find(l => l.id === this.currentAttendanceLectureId) ||
+                                  allAssignments.find(l => (l.section || '').toLowerCase() === (this.currentAttendanceSection || '').toLowerCase() && (l.lecDate === this.currentAttendanceDate || l.rawLecDate === this.currentAttendanceDate)) ||
+                                  allAssignments.find(l => (l.section || '').toLowerCase() === (this.currentAttendanceSection || '').toLowerCase());
 
             await AttendanceService.saveAttendanceChanges(
               this.currentAttendanceSection,
               this.currentAttendanceDate,
               this.attendanceRecords,
               {
-                facultyAssignmentId: matchedLecture?.id || null,
+                facultyAssignmentId: matchedLecture?.id || this.currentAttendanceLectureId || null,
                 lecId: matchedLecture?.lecId || null
               }
             );
@@ -560,7 +723,10 @@ export class FacultyDashboardApp {
       if (selectAttSection) {
         selectAttSection.addEventListener('change', async (e) => {
           this.currentAttendanceSection = e.target.value;
-          const sectionLectures = this.lectures.filter(l => 
+          const dateLectures = (this.rawAssignments || []).filter(l => 
+            l.lecDate === this.currentAttendanceDate || l.rawLecDate === this.currentAttendanceDate
+          );
+          const sectionLectures = dateLectures.filter(l => 
             (l.section || '').toLowerCase() === (this.currentAttendanceSection || '').toLowerCase()
           );
           if (sectionLectures.length === 1) {
@@ -584,6 +750,14 @@ export class FacultyDashboardApp {
       if (inputAttDate) {
         inputAttDate.addEventListener('change', async (e) => {
           this.currentAttendanceDate = e.target.value;
+          const dateLectures = (this.rawAssignments || []).filter(l => 
+            l.lecDate === this.currentAttendanceDate || l.rawLecDate === this.currentAttendanceDate
+          );
+          const availableSections = [...new Set(dateLectures.map(l => l.section).filter(Boolean))];
+          if (this.currentAttendanceSection && !availableSections.some(s => s.toLowerCase() === this.currentAttendanceSection.toLowerCase())) {
+            this.currentAttendanceSection = availableSections.length === 1 ? availableSections[0] : '';
+            this.currentAttendanceLectureId = '';
+          }
           await this.refreshAttendance();
           await this.render();
         });

@@ -2,11 +2,56 @@
  * Individual Lecture Card Component
  */
 export const renderLectureCard = (lecture) => {
-  const isHighlight = lecture.status === 'starting_soon';
-  const badgeClass = isHighlight ? 'badge-starts-soon' : 'badge-time-relative';
+  const isLive = lecture.status === 'live';
+  const isStartingSoon = lecture.status === 'starting_soon';
+  const isCompleted = lecture.status === 'completed';
+  const isUpcoming = lecture.status === 'upcoming';
+
+  let cardModifier = '';
+  let badgeHTML = '';
+
+  if (isLive) {
+    cardModifier = 'highlight-card live-card';
+    badgeHTML = `
+      <div class="badge-live">
+        <span class="pulse-indicator-dot dot-live"></span>
+        ${lecture.badgeText || 'Live Now'}
+      </div>
+    `;
+  } else if (isStartingSoon) {
+    cardModifier = 'highlight-card';
+    badgeHTML = `
+      <div class="badge-starts-soon">
+        <span class="pulse-indicator-dot"></span>
+        ${lecture.badgeText || 'Starting Soon'}
+      </div>
+    `;
+  } else if (isCompleted) {
+    cardModifier = 'completed-card';
+    badgeHTML = `
+      <div class="badge-completed">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 3px;">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        ${lecture.badgeText || 'Completed'}
+      </div>
+    `;
+  } else if (isUpcoming) {
+    badgeHTML = `
+      <div class="badge-upcoming">
+        ${lecture.badgeText || 'Upcoming'}
+      </div>
+    `;
+  } else {
+    badgeHTML = `
+      <div class="badge-time-relative">
+        ${lecture.badgeText || 'Scheduled'}
+      </div>
+    `;
+  }
 
   return `
-    <div class="lecture-card ${isHighlight ? 'highlight-card' : ''}" 
+    <div class="lecture-card ${cardModifier}" 
          data-lecture-id="${lecture.id}" 
          data-class="${lecture.className}" 
          data-section="${lecture.section}">
@@ -32,12 +77,10 @@ export const renderLectureCard = (lecture) => {
       </div>
 
       <div class="lecture-card-right">
-        <div class="${badgeClass}">
-          ${isHighlight ? '<span class="pulse-indicator-dot"></span>' : ''}
-          ${lecture.badgeText}
-        </div>
+        ${badgeHTML}
         <span class="lecture-date-caption">${lecture.shortDate || ''}</span>
       </div>
     </div>
   `;
 };
+

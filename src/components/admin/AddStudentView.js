@@ -11,7 +11,7 @@ export const renderAddStudentView = (students = [], sections = []) => {
   });
 
   const sectionFilterOptionsHTML = Object.entries(sectionCounts).map(([sec, count]) => `
-    <option value="${sec.toLowerCase()}">Sec ${sec} (${count} students)</option>
+    <option value="${String(sec).toLowerCase()}">Sec ${sec} (${count} students)</option>
   `).join('');
 
   const sectionOptionsHTML = sections.length > 0
@@ -24,33 +24,48 @@ export const renderAddStudentView = (students = [], sections = []) => {
     ? students.map((s, idx) => {
         const secName = s.sections?.section_name || s.section_name || s.sectionName || '—';
         const branchName = s.branch || s.sections?.branch || 'CSE';
-        const semName = s.semester || s.sections?.semester || '4th';
+        const semName = s.semester || s.sections?.semester || '4';
         const rollNo = s.roll_no || s.rollNo || '';
         const email = s.personal_email || s.personalEmail || s.login_username || '—';
         const status = s.account_status || s.accountStatus || 'active';
+        const isDeviceBound = !!s.passkey_credential_id;
+        const deviceName = s.device_name || 'Registered Device';
         const searchKeywords = `${s.name} ${rollNo} ${secName} ${branchName} ${semName} ${email}`.toLowerCase();
 
         return `
           <tr class="student-table-row" 
               style="display: none;"
-              data-section="${secName.toLowerCase()}" 
-              data-branch="${branchName.toLowerCase()}" 
-              data-semester="${semName.toLowerCase()}"
-              data-status="${status.toLowerCase()}"
+              data-section="${String(secName).toLowerCase()}" 
+              data-branch="${String(branchName).toLowerCase()}" 
+              data-semester="${String(semName).toLowerCase()}"
+              data-status="${String(status).toLowerCase()}"
               data-search="${searchKeywords}">
             <td>${idx + 1}</td>
             <td><strong>${s.name}</strong></td>
             <td><code>${rollNo}</code></td>
             <td><span class="badge-tag">Sec ${secName}</span></td>
-            <td>${branchName} • ${semName}</td>
-            <td>${email}</td>
+            <td>${branchName} • Sem ${semName}</td>
+            <td>
+              ${isDeviceBound 
+                ? `<span class="badge-status-active" style="background: #ECFDF5; color: #059669; border: 1px solid #A7F3D0;" title="Bound to ${deviceName}">📱 Bound (${deviceName})</span>`
+                : `<span class="badge-tag" style="background: #F1F5F9; color: #64748B;">🔓 Unbound</span>`
+              }
+            </td>
             <td><span class="badge-status-active">${status}</span></td>
+            <td>
+              ${isDeviceBound
+                ? `<button type="button" class="btn-action-delete btn-reset-student-device" data-student-id="${s.id}" data-student-name="${s.name}" title="Reset device binding to allow login on a new phone" style="color: #D97706; border-color: #FDE68A; background: #FFFBEB; font-size: 0.78rem; padding: 4px 8px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                    🔄 <span>Reset Device</span>
+                   </button>`
+                : `<span style="color: var(--text-muted); font-size: 0.8rem;">—</span>`
+              }
+            </td>
           </tr>
         `;
       }).join('')
     : `
       <tr id="row-no-students">
-        <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
+        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">
           No students enrolled yet in database. Click "+ Add New Student" above to enroll your first student.
         </td>
       </tr>
@@ -58,7 +73,7 @@ export const renderAddStudentView = (students = [], sections = []) => {
 
   const initialPromptRowHTML = `
     <tr id="row-select-classroom-prompt">
-      <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 3rem 1.5rem;">
+      <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 3rem 1.5rem;">
         <div style="width: 48px; height: 48px; border-radius: 50%; background: #EEF2FF; color: #4338CA; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px auto;">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
@@ -136,14 +151,14 @@ export const renderAddStudentView = (students = [], sections = []) => {
               <label>Semester *</label>
               <select name="semester" class="admin-select" required>
                 <option value="" disabled selected>Select Semester...</option>
-                <option value="1st">1st Semester</option>
-                <option value="2nd">2nd Semester</option>
-                <option value="3rd">3rd Semester</option>
-                <option value="4th">4th Semester</option>
-                <option value="5th">5th Semester</option>
-                <option value="6th">6th Semester</option>
-                <option value="7th">7th Semester</option>
-                <option value="8th">8th Semester</option>
+                <option value="1">Semester 1</option>
+                <option value="2">Semester 2</option>
+                <option value="3">Semester 3</option>
+                <option value="4">Semester 4</option>
+                <option value="5">Semester 5</option>
+                <option value="6">Semester 6</option>
+                <option value="7">Semester 7</option>
+                <option value="8">Semester 8</option>
               </select>
             </div>
 
@@ -206,14 +221,14 @@ export const renderAddStudentView = (students = [], sections = []) => {
             <!-- Semester Dropdown -->
             <select id="filter-student-semester" class="admin-filter-select">
               <option value="all">All Semesters</option>
-              <option value="1st">1st Sem</option>
-              <option value="2nd">2nd Sem</option>
-              <option value="3rd">3rd Sem</option>
-              <option value="4th">4th Sem</option>
-              <option value="5th">5th Sem</option>
-              <option value="6th">6th Sem</option>
-              <option value="7th">7th Sem</option>
-              <option value="8th">8th Sem</option>
+              <option value="1">Sem 1</option>
+              <option value="2">Sem 2</option>
+              <option value="3">Sem 3</option>
+              <option value="4">Sem 4</option>
+              <option value="5">Sem 5</option>
+              <option value="6">Sem 6</option>
+              <option value="7">Sem 7</option>
+              <option value="8">Sem 8</option>
             </select>
 
             <!-- Reset Button -->
@@ -241,8 +256,9 @@ export const renderAddStudentView = (students = [], sections = []) => {
               <th>Roll No</th>
               <th>Section</th>
               <th>Branch / Sem</th>
-              <th>Email</th>
+              <th>Device Security</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>

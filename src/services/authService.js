@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { hashPassword } from '../utils/totpCrypto.js';
+import { registerDevicePasskey, verifyDevicePasskey } from '../utils/webAuthnHelper.js';
 
 const STORAGE_KEY = 'presently_auth_session';
 
@@ -21,47 +22,12 @@ export class AuthService {
       throw new Error('Please enter your account password.');
     }
 
-    // 1. STUDENT LOGIN
+    // 1. STUDENT LOGIN (Hardware Device Binding via WebAuthn)
     if (cleanRole === 'student') {
       try {
         const enteredHash = await hashPassword(password);
 
-        // A. Try Database Stored Function (Atomic & RLS-Bypass)
-        try {
-          const { data: rpcRes, error: rpcErr } = await supabase.rpc('verify_or_init_student_login', {
-            p_identifier: cleanId,
-            p_password_hash: enteredHash
-          });
-
-          if (!rpcErr && rpcRes) {
-            if (!rpcRes.success) {
-              throw new Error(rpcRes.message || 'Authentication failed');
-            }
-            const st = rpcRes.student;
-            const sessionPayload = {
-              user: {
-                id: st.id,
-                email: st.personal_email || `${st.roll_no}@university.edu`,
-                name: st.name,
-                roll_no: st.roll_no,
-                section_id: st.section_id,
-                section_name: st.section_name || '2A',
-                class_name: `${st.branch || 'CSE'} - ${st.semester || '3rd'} Sem`
-              },
-              role: 'student',
-              isSupabase: true,
-              loggedAt: new Date().toISOString()
-            };
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionPayload));
-            return { success: true, role: 'student', redirectUrl: '/student.html' };
-          }
-        } catch (rpcEx) {
-          if (rpcEx.message?.includes('Incorrect') || rpcEx.message?.includes('not found') || rpcEx.message?.includes('institutional')) {
-            throw rpcEx;
-          }
-        }
-
-        // B. Direct Table Query & Update Fallback
+        // Fetch student record from database including passkey details
         const { data: student, error: stdErr } = await supabase
           .from('students')
           .select('*, sections:section_id(id, section_name, branch, semester)')
@@ -73,13 +39,13 @@ export class AuthService {
           throw new Error(`Student with Roll No / Username "${cleanId}" not found in institutional records.`);
         }
 
+        // Verify password hash
         if (student.password_hash) {
-          // Verify existing password hash
           if (student.password_hash !== enteredHash && student.password_hash !== password) {
             throw new Error('Incorrect password. Please verify and try again.');
           }
         } else {
-          // First-time Login: Save password_hash in database
+          // Initialize password if first time
           try {
             await supabase
               .from('students')
@@ -93,26 +59,12 @@ export class AuthService {
           }
         }
 
-        const sessionPayload = {
-          user: {
-            id: student.id,
-            email: student.personal_email || `${student.roll_no}@university.edu`,
-            name: student.name,
-            roll_no: student.roll_no,
-            section_id: student.section_id,
-            section_name: student.sections?.section_name || '2A',
-            class_name: `${student.branch || 'CSE'} - ${student.semester || '3rd'} Sem`
-          },
-          role: 'student',
-          isSupabase: true,
-          loggedAt: new Date().toISOString()
-        };
-
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionPayload));
+        // Return challenge requiring direct user gesture for passkey
         return {
-          success: true,
-          role: 'student',
-          redirectUrl: '/student.html'
+          requiresDevicePrompt: true,
+          isNewDevice: !student.passkey_credential_id,
+          student: student,
+          deviceName: student.device_name || 'Personal Device'
         };
       } catch (err) {
         throw new Error(err.message || 'Student login failed.');
@@ -319,6 +271,65 @@ export class AuthService {
   }
 
   /**
+   * Complete Student Device Passkey Registration or Verification (Called immediately on user button tap)
+   */
+  static async completeStudentDeviceAuth(student, isNewDevice) {
+    if (isNewDevice || !student.passkey_credential_id) {
+      // 1. First-Time Passkey Registration (Hardware Security Enclave)
+      const passkeyResult = await registerDevicePasskey({
+        id: student.id,
+        roll_no: student.roll_no,
+        name: student.name,
+        email: student.personal_email
+      });
+
+      if (!passkeyResult?.credentialId) {
+        throw new Error('Device binding registration was not completed.');
+      }
+
+      const { error: bindErr } = await supabase
+        .from('students')
+        .update({
+          passkey_credential_id: passkeyResult.credentialId,
+          passkey_public_key: passkeyResult.publicKey,
+          device_bound_at: passkeyResult.boundAt,
+          device_name: passkeyResult.deviceName
+        })
+        .eq('id', student.id);
+
+      if (bindErr) {
+        console.error('Failed to record device passkey:', bindErr);
+        throw new Error('Failed to record device binding in institutional database. Please try again.');
+      }
+    } else {
+      // 2. Subsequent Passkey Assertion
+      await verifyDevicePasskey(student.passkey_credential_id, student.device_name);
+    }
+
+    const sessionPayload = {
+      user: {
+        id: student.id,
+        email: student.personal_email || `${student.roll_no}@university.edu`,
+        name: student.name,
+        roll_no: student.roll_no,
+        section_id: student.section_id,
+        section_name: student.sections?.section_name || '2A',
+        class_name: `${student.branch || 'CSE'} - Sem ${student.semester || '3'}`
+      },
+      role: 'student',
+      isSupabase: true,
+      loggedAt: new Date().toISOString()
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionPayload));
+    return {
+      success: true,
+      role: 'student',
+      redirectUrl: '/student.html'
+    };
+  }
+
+  /**
    * Get Destination Dashboard URL by Role
    */
   static getRedirectUrl(role) {
@@ -327,3 +338,4 @@ export class AuthService {
     return '/student.html';
   }
 }
+
