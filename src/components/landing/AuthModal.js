@@ -134,8 +134,8 @@ export const initAuthModal = () => {
     if (errorMsg) errorMsg.style.display = 'none';
   };
 
-  const showDeviceView = (student, isNewDevice, deviceName) => {
-    activeStudentChallenge = { student, isNewDevice, deviceName };
+  const showDeviceView = (student, isNewDevice, deviceName, enteredPasswordHash = '') => {
+    activeStudentChallenge = { student, isNewDevice, deviceName, enteredPasswordHash };
     if (mainView) mainView.style.display = 'none';
     if (deviceView) deviceView.style.display = 'block';
     if (deviceErrorMsg) deviceErrorMsg.style.display = 'none';
@@ -162,14 +162,14 @@ export const initAuthModal = () => {
   if (btnTriggerPasskey) {
     btnTriggerPasskey.addEventListener('click', async () => {
       if (!activeStudentChallenge) return;
-      const { student, isNewDevice } = activeStudentChallenge;
+      const { student, isNewDevice, enteredPasswordHash } = activeStudentChallenge;
 
       if (deviceErrorMsg) deviceErrorMsg.style.display = 'none';
       btnTriggerPasskey.disabled = true;
       btnTriggerPasskey.innerHTML = '<span>⏳</span> Prompting device security...';
 
       try {
-        const res = await AuthService.completeStudentDeviceAuth(student, isNewDevice);
+        const res = await AuthService.completeStudentDeviceAuth(student, isNewDevice, enteredPasswordHash);
         if (res.success) {
           btnTriggerPasskey.innerHTML = '<span>✅</span> Verified! Redirecting...';
           window.location.href = res.redirectUrl;
@@ -256,7 +256,7 @@ export const initAuthModal = () => {
         const res = await AuthService.signIn(email, password, selectedRole);
 
         if (res.requiresDevicePrompt) {
-          showDeviceView(res.student, res.isNewDevice, res.deviceName);
+          showDeviceView(res.student, res.isNewDevice, res.deviceName, res.enteredPasswordHash);
           return;
         }
 

@@ -49,6 +49,7 @@ export const renderAddFacultyView = (facultyList = []) => {
               <select name="department" class="admin-select" required>
                 <option value="" disabled selected>Select Department...</option>
                 <option value="Computer Science & Engineering">Computer Science & Engineering (CSE)</option>
+                <option value="CSE (AI ML)">Computer Science & Engineering - AI & ML (CSE(AIML))</option>
                 <option value="Information Technology">Information Technology (IT)</option>
                 <option value="Electronics & Communication">Electronics & Communication (ECE)</option>
                 <option value="Mechanical Engineering">Mechanical Engineering (ME)</option>

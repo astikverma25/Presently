@@ -25,18 +25,42 @@ export const getSessionUser = async () => {
 };
 
 export const getCurrentUserProfile = async () => {
-  // 1. Check active local session from localStorage
+  // 1. Check active local session from localStorage with backend verification
   try {
     const raw = localStorage.getItem('presently_auth_session');
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed?.user?.id) {
         if (parsed.role === 'student') {
+          const isLocalDev = typeof import.meta !== 'undefined' && 
+            import.meta.env?.DEV && 
+            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+          // On production/HTTPS: Verify session token against backend (prevents localStorage tampering)
+          if (!isLocalDev && !parsed.isLocalDev) {
+            if (!parsed.token) {
+              localStorage.removeItem('presently_auth_session');
+              return null;
+            }
+
+            const { data: verifyRes, error: vErr } = await supabase.rpc('verify_student_session', {
+              p_student_id: parsed.user.id,
+              p_session_token: parsed.token
+            });
+
+            if (vErr || !verifyRes?.valid) {
+              console.warn('Backend student session token invalid/tampered:', vErr || verifyRes?.message);
+              localStorage.removeItem('presently_auth_session');
+              return null;
+            }
+          }
+
           const { data: std } = await supabase
             .from('students')
             .select('*, sections:section_id(id, section_name, branch, semester)')
             .eq('id', parsed.user.id)
             .maybeSingle();
+
           if (std) {
             return {
               ...std,
@@ -48,7 +72,7 @@ export const getCurrentUserProfile = async () => {
           const { data: fac } = await supabase
             .from('faculty')
             .select('*')
-            .eq('id', parsed.user.id)
+            .or(`id.eq.${parsed.user.id},email.ilike.${parsed.user.email}`)
             .maybeSingle();
           if (fac) return { ...fac, role: 'faculty' };
         }

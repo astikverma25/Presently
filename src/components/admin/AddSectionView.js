@@ -44,6 +44,7 @@ export const renderAddSectionView = (sectionsList = []) => {
               <select name="branch" class="admin-select" required>
                 <option value="" disabled selected>Select Branch / Department...</option>
                 <option value="CSE">Computer Science & Engineering (CSE)</option>
+                <option value="CSE(AIML)">Computer Science & Engineering - AI & ML (CSE (AI ML))</option>
                 <option value="IT">Information Technology (IT)</option>
                 <option value="ECE">Electronics & Communication (ECE)</option>
                 <option value="ME">Mechanical Engineering (ME)</option>

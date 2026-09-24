@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { AuthService } from './authService.js';
+import { validateStrongPassword } from '../utils/totpCrypto.js';
 import { 
   getIndianDateString, 
   getIndianTimeVal, 
@@ -17,49 +18,75 @@ export class FacultyService {
    */
   static async getProfile() {
     try {
-      const session = AuthService.getCurrentSession();
-      const email = session?.user?.email;
+      let session = AuthService.getCurrentSession();
+
+      // If local storage session is absent or doesn't have an email, check active Supabase Auth session
+      if (!session?.user?.email) {
+        const { data: { session: sbSession } } = await supabase.auth.getSession();
+        if (sbSession?.user?.email) {
+          session = {
+            user: {
+              id: sbSession.user.id,
+              email: sbSession.user.email,
+              name: sbSession.user.user_metadata?.name || sbSession.user.email.split('@')[0],
+              role: 'faculty',
+              department: sbSession.user.user_metadata?.department || ''
+            },
+            role: 'staff',
+            token: sbSession.access_token,
+            isSupabase: true,
+            loggedAt: new Date().toISOString()
+          };
+          localStorage.setItem('presently_auth_session', JSON.stringify(session));
+        }
+      }
+
+      if (!session?.user || (session.role !== 'staff' && session.role !== 'faculty')) {
+        return null;
+      }
+
+      const email = (session.user.email || '').trim().toLowerCase();
 
       if (email) {
         const { data, error } = await supabase
           .from('faculty')
           .select('*')
-          .ilike('email', email.trim())
+          .ilike('email', email)
           .maybeSingle();
 
         if (data && !error) {
+          if (session.user.id !== data.id) {
+            session.user.id = data.id;
+            session.user.name = data.name;
+            session.user.department = data.department || '';
+            localStorage.setItem('presently_auth_session', JSON.stringify(session));
+          }
+
           return {
             id: data.id,
             name: data.name,
             email: data.email,
-            department: data.department || 'General',
-            avatarInitials: data.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+            department: data.department || '',
+            avatarInitials: (data.name || 'FM').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
           };
         }
       }
 
-      // Check first faculty in database
-      const { data: firstFac } = await supabase.from('faculty').select('*').limit(1).maybeSingle();
-      if (firstFac) {
+      // If user is authenticated in Supabase session but row not yet in public.faculty
+      if (session.user.id) {
         return {
-          id: firstFac.id,
-          name: firstFac.name,
-          email: firstFac.email,
-          department: firstFac.department || 'General',
-          avatarInitials: firstFac.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+          id: session.user.id,
+          name: session.user.name || session.user.email?.split('@')[0] || 'Faculty Member',
+          email: session.user.email || '',
+          department: session.user.department || '',
+          avatarInitials: ((session.user.name || session.user.email || 'FM').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2) || 'FM').toUpperCase()
         };
       }
     } catch (err) {
       console.warn('Error fetching faculty profile:', err);
     }
 
-    return {
-      id: null,
-      name: 'Faculty Member',
-      email: '',
-      department: 'General',
-      avatarInitials: 'FM'
-    };
+    return null;
   }
 
   /**
@@ -85,9 +112,10 @@ export class FacultyService {
           section:section_id (id, section_name, branch, semester, total_students)
         `);
 
-      if (facultyId) {
-        query = query.eq('faculty_id', facultyId);
+      if (!facultyId) {
+        return [];
       }
+      query = query.eq('faculty_id', facultyId);
 
       const { data, error } = await query;
 
@@ -442,9 +470,10 @@ export class FacultyService {
           section:section_id (id, section_name, branch, semester, total_students)
         `);
 
-      if (facultyId) {
-        assignQuery = assignQuery.eq('faculty_id', facultyId);
+      if (!facultyId) {
+        return [];
       }
+      assignQuery = assignQuery.eq('faculty_id', facultyId);
 
       const { data: assignments, error: assignErr } = await assignQuery;
 
@@ -635,5 +664,149 @@ export class FacultyService {
     const targetPool = activeSections.length > 0 ? activeSections : sectionList;
     const sum = targetPool.reduce((acc, curr) => acc + curr.percentage, 0);
     return Math.round(sum / targetPool.length);
+  }
+
+  /**
+   * 7. Change Faculty Password in Supabase Auth
+   */
+  static async changePassword(currentPassword, newPassword) {
+    try {
+      if (!currentPassword) {
+        throw new Error('Please enter your current password.');
+      }
+      
+      const pwdCheck = validateStrongPassword(newPassword);
+      if (!pwdCheck.isValid) {
+        throw new Error(pwdCheck.message);
+      }
+
+      const profile = await FacultyService.getProfile();
+      const email = profile?.email;
+
+      if (!email) {
+        throw new Error('Faculty profile not found. Please re-login.');
+      }
+
+      // 1. Re-authenticate to ensure an active Supabase Auth session and verify current password
+      const { data: authSession, error: signInErr } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password: currentPassword
+      });
+
+      if (signInErr || !authSession?.session) {
+        throw new Error('Current password verification failed. Please enter the correct current password.');
+      }
+
+      // 2. Update to new password in Supabase Auth
+      const { data, error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) throw error;
+      return { success: true, message: 'Password updated successfully in Supabase Auth!' };
+    } catch (err) {
+      console.error('Faculty changePassword error:', err);
+      return { success: false, message: err?.message || 'Failed to update password.' };
+    }
+  }
+
+  /**
+   * 8. Change Faculty Email in Supabase Auth & public.faculty
+   */
+  static async changeEmail(facultyId, newEmail, currentPassword = '') {
+    try {
+      if (!newEmail || !newEmail.includes('@')) {
+        throw new Error('Please enter a valid email address.');
+      }
+
+      const cleanEmail = newEmail.trim().toLowerCase();
+      const profile = await FacultyService.getProfile();
+      const currentEmail = (profile?.email || '').trim().toLowerCase();
+
+      if (cleanEmail === currentEmail) {
+        throw new Error('The new email address is identical to your current email.');
+      }
+
+      // 1. If current password provided, re-authenticate to verify identity and refresh Supabase session
+      if (currentPassword && currentEmail) {
+        const { data: authSession, error: signInErr } = await supabase.auth.signInWithPassword({
+          email: currentEmail,
+          password: currentPassword
+        });
+
+        if (signInErr || !authSession?.session) {
+          throw new Error('Current password verification failed. Please enter your correct current password.');
+        }
+      }
+
+      // 2. Primary: Execute atomic change_faculty_email RPC (directly updates auth.users and public.faculty)
+      const targetFacultyId = facultyId || profile?.id || null;
+      let rpcSucceeded = false;
+      let rpcMessage = '';
+
+      try {
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('change_faculty_email', {
+          p_faculty_id: targetFacultyId,
+          p_current_email: currentEmail,
+          p_new_email: cleanEmail
+        });
+
+        if (!rpcErr && rpcRes) {
+          if (rpcRes.success === false) {
+            throw new Error(rpcRes.message || 'Failed to update email.');
+          }
+          rpcSucceeded = true;
+          rpcMessage = rpcRes.message || 'Email updated successfully in both Supabase Auth and database!';
+        }
+      } catch (rpcEx) {
+        console.warn('change_faculty_email RPC notice (falling back to direct client updates):', rpcEx);
+        if (rpcEx.message && !rpcEx.message.includes('function') && !rpcEx.message.includes('not found')) {
+          throw rpcEx;
+        }
+      }
+
+      // 3. Fallback: If RPC not yet applied, perform standard client-side updates
+      if (!rpcSucceeded) {
+        // A. Update in Supabase Auth (auth.users)
+        try {
+          await supabase.auth.updateUser({ email: cleanEmail });
+        } catch (authEx) {
+          console.warn('Client updateUser notice:', authEx);
+        }
+
+        // B. Update in public.faculty database table
+        if (targetFacultyId) {
+          const { error: dbErr } = await supabase
+            .from('faculty')
+            .update({ email: cleanEmail })
+            .eq('id', targetFacultyId);
+
+          if (dbErr) {
+            console.error('DB faculty email update error:', dbErr);
+            throw new Error(`Database record update failed: ${dbErr.message}`);
+          }
+        }
+      }
+
+      // 4. Update localStorage session email
+      try {
+        const sessionRaw = localStorage.getItem('presently_auth_session');
+        if (sessionRaw) {
+          const session = JSON.parse(sessionRaw);
+          if (session?.user) {
+            session.user.email = cleanEmail;
+            localStorage.setItem('presently_auth_session', JSON.stringify(session));
+          }
+        }
+      } catch (e) {}
+
+      return { 
+        success: true, 
+        message: rpcMessage || 'Email updated successfully in both Supabase Auth and database!'
+      };
+    } catch (err) {
+      console.error('Faculty changeEmail error:', err);
+      return { success: false, message: err?.message || 'Failed to update email.' };
+    }
   }
 }

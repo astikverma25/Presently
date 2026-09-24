@@ -38,6 +38,25 @@ export class AdminDashboardApp {
 
     try {
       this.profile = await AdminService.getProfile();
+
+      if (!this.profile || !this.profile.id) {
+        // Strict Auth Guard: User is not logged in as an administrator
+        this.container.innerHTML = `
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; padding: 24px; text-align: center; font-family: var(--font-sans); background: #F8FAFC;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: #EEF2FF; color: #4F46E5; display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 16px;">
+              🔒
+            </div>
+            <h2 style="font-size: 18px; font-weight: 700; color: #1E293B; margin-bottom: 8px;">Admin Login Required</h2>
+            <p style="font-size: 13px; color: #64748B; max-width: 300px; margin-bottom: 20px;">Please log in with your administrator credentials to access this portal.</p>
+            <a href="/index.html" style="display: inline-block; padding: 10px 22px; background: #4F46E5; color: #FFFFFF; font-weight: 600; font-size: 13px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">Go to Login</a>
+          </div>
+        `;
+        setTimeout(() => {
+          window.location.href = '/index.html';
+        }, 1000);
+        return;
+      }
+
       await this.refreshData();
     } catch (err) {
       console.error('Initialization error:', err);

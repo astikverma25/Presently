@@ -141,6 +141,7 @@ export const renderAddStudentView = (students = [], sections = []) => {
               <select name="branch" class="admin-select" required>
                 <option value="" disabled selected>Select Branch...</option>
                 <option value="CSE">Computer Science & Engineering (CSE)</option>
+                <option value="CSE(AIML)">Computer Science & Engineering - AI & ML (CSE(AIML))</option>
                 <option value="IT">Information Technology (IT)</option>
                 <option value="ECE">Electronics & Communication (ECE)</option>
                 <option value="ME">Mechanical Engineering (ME)</option>
@@ -213,6 +214,7 @@ export const renderAddStudentView = (students = [], sections = []) => {
             <select id="filter-student-branch" class="admin-filter-select">
               <option value="all">All Branches</option>
               <option value="cse">CSE</option>
+              <option value="cse(aiml)">CSE(AIML)</option>
               <option value="it">IT</option>
               <option value="ece">ECE</option>
               <option value="me">ME</option>

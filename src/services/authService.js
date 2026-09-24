@@ -59,11 +59,43 @@ export class AuthService {
           }
         }
 
-        // Return challenge requiring direct user gesture for passkey
+        const isLocalDev = typeof import.meta !== 'undefined' && 
+          import.meta.env?.DEV && 
+          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+        // On local dev server only (completely stripped from production builds)
+        if (isLocalDev) {
+          const sessionPayload = {
+            user: {
+              id: student.id,
+              email: student.personal_email || `${student.roll_no}@university.edu`,
+              name: student.name,
+              roll_no: student.roll_no,
+              section_id: student.section_id,
+              section_name: student.sections?.section_name || '2A',
+              class_name: `${student.branch || 'CSE'} - Sem ${student.semester || '3'}`
+            },
+            token: student.session_token || 'dev-local-token',
+            role: 'student',
+            isSupabase: true,
+            isLocalDev: true,
+            loggedAt: new Date().toISOString()
+          };
+
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionPayload));
+          return {
+            success: true,
+            role: 'student',
+            redirectUrl: '/student.html'
+          };
+        }
+
+        // Production / HTTPS: Return challenge requiring direct user gesture for passkey
         return {
           requiresDevicePrompt: true,
           isNewDevice: !student.passkey_credential_id,
           student: student,
+          enteredPasswordHash: enteredHash,
           deviceName: student.device_name || 'Personal Device'
         };
       } catch (err) {
@@ -74,45 +106,57 @@ export class AuthService {
     // 2. FACULTY LOGIN
     if (cleanRole === 'staff' || cleanRole === 'faculty') {
       try {
-        // Try Supabase Auth first
-        if (supabase?.auth) {
-          const { data } = await supabase.auth.signInWithPassword({
-            email: cleanId.toLowerCase(),
-            password: password
-          });
-          if (data?.session) {
-            const sessionPayload = {
-              user: data.user,
-              role: 'staff',
-              token: data.session.access_token,
-              isSupabase: true
-            };
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionPayload));
-            return { success: true, role: 'staff', redirectUrl: '/faculty.html' };
+        let facultyEmail = cleanId.toLowerCase();
+
+        // 1. If username was provided instead of email, lookup faculty record to resolve email
+        if (!facultyEmail.includes('@')) {
+          const { data: facultyByName } = await supabase
+            .from('faculty')
+            .select('*')
+            .ilike('name', cleanId)
+            .limit(1)
+            .maybeSingle();
+
+          if (facultyByName?.email) {
+            facultyEmail = facultyByName.email.toLowerCase();
           }
         }
 
-        // Direct lookup from faculty table
-        const { data: faculty, error: facErr } = await supabase
+        // 2. Strictly authenticate with Supabase Auth
+        const { data: authRes, error: authErr } = await supabase.auth.signInWithPassword({
+          email: facultyEmail,
+          password: password
+        });
+
+        if (authErr || !authRes?.session) {
+          throw new Error(authErr?.message || `Invalid credentials for faculty member "${cleanId}".`);
+        }
+
+        // 3. Find the exact matching faculty row for the authenticated user's email
+        const authenticatedEmail = (authRes.user.email || facultyEmail).toLowerCase();
+        const { data: facultyRecord } = await supabase
           .from('faculty')
           .select('*')
-          .or(`email.ilike.${cleanId},name.ilike.${cleanId}`)
-          .limit(1)
+          .ilike('email', authenticatedEmail)
           .maybeSingle();
 
-        if (facErr || !faculty) {
-          throw new Error(`Faculty member "${cleanId}" not found in institutional faculty registry.`);
-        }
+        const facultyUser = facultyRecord || {
+          id: authRes.user.id,
+          email: authenticatedEmail,
+          name: authRes.user.user_metadata?.name || authenticatedEmail.split('@')[0],
+          department: authRes.user.user_metadata?.department || ''
+        };
 
         const sessionPayload = {
           user: {
-            id: faculty.id,
-            email: faculty.email,
-            name: faculty.name,
+            id: facultyUser.id,
+            email: facultyUser.email || authenticatedEmail,
+            name: facultyUser.name,
             role: 'faculty',
-            department: faculty.department || 'Computer Science & Engineering'
+            department: facultyUser.department || ''
           },
           role: 'staff',
+          token: authRes.session.access_token,
           isSupabase: true,
           loggedAt: new Date().toISOString()
         };
@@ -131,87 +175,88 @@ export class AuthService {
     // 3. ADMIN LOGIN
     if (cleanRole === 'admin') {
       try {
-        let admin = null;
-        const lowerId = cleanId.toLowerCase();
+        let adminEmail = cleanId.toLowerCase();
 
-        // A. Attempt lookup in Supabase admins table if reachable
-        try {
-          const { data: dbAdmin } = await supabase
+        // A. If username was provided without @, lookup in admins table to resolve email
+        if (!adminEmail.includes('@')) {
+          const { data: adminByName } = await supabase
             .from('admins')
             .select('*')
-            .or(`email.ilike.${cleanId},name.ilike.${cleanId}`)
+            .ilike('name', cleanId)
             .limit(1)
             .maybeSingle();
 
-          if (dbAdmin) {
-            admin = dbAdmin;
+          if (adminByName?.email) {
+            adminEmail = adminByName.email.toLowerCase();
+          } else {
+            // Check designated admin aliases
+            const adminAliases = {
+              'vishalgupta': 'vishalgupta@liet.in',
+              'admin': 'admin@liet.in'
+            };
+            if (adminAliases[adminEmail]) {
+              adminEmail = adminAliases[adminEmail];
+            }
           }
-        } catch (dbEx) {
-          console.warn('Admin database lookup skipped due to RLS:', dbEx);
         }
 
-        // B. Strict Designated Institutional Admin Registry Whitelist
-        if (!admin) {
-          const adminAccounts = {
+        // B. Strictly authenticate credentials with Supabase Auth
+        const { data: authRes, error: authErr } = await supabase.auth.signInWithPassword({
+          email: adminEmail,
+          password: password
+        });
+
+        if (authErr || !authRes?.session) {
+          throw new Error(authErr?.message || `Invalid credentials for administrator "${cleanId}".`);
+        }
+
+        // C. Verify authorization in public.admins table using the authenticated user's email
+        const authenticatedEmail = (authRes.user.email || adminEmail).toLowerCase();
+        let adminRecord = null;
+
+        const { data: dbAdmin } = await supabase
+          .from('admins')
+          .select('*')
+          .ilike('email', authenticatedEmail)
+          .maybeSingle();
+
+        if (dbAdmin) {
+          adminRecord = dbAdmin;
+        } else {
+          // Whitelist fallback for initial system bootstrap
+          const designatedAdmins = {
             'vishalgupta@liet.in': { name: 'Vishal Gupta', role: 'Super Admin', id: 'admin-vishal-gupta' },
-            'vishalgupta': { name: 'Vishal Gupta', role: 'Super Admin', id: 'admin-vishal-gupta' },
             'admin@liet.in': { name: 'System Administrator', role: 'Super Admin', id: 'admin-liet' },
             'admin@presently.edu': { name: 'System Administrator', role: 'Super Admin', id: 'admin-presently' },
-            'admin@university.edu': { name: 'System Administrator', role: 'Super Admin', id: 'admin-university' },
-            'admin': { name: 'System Administrator', role: 'Super Admin', id: 'admin-root' }
+            'admin@university.edu': { name: 'System Administrator', role: 'Super Admin', id: 'admin-university' }
           };
 
-          if (adminAccounts[lowerId]) {
-            const acc = adminAccounts[lowerId];
-            admin = {
+          if (designatedAdmins[authenticatedEmail]) {
+            const acc = designatedAdmins[authenticatedEmail];
+            adminRecord = {
               id: acc.id,
               name: acc.name,
-              email: lowerId.includes('@') ? lowerId : `${lowerId}@liet.in`,
+              email: authenticatedEmail,
               role: acc.role
             };
           }
         }
 
-        // C. If not a designated admin, check if user is a Faculty or Student attempting cross-login
-        if (!admin) {
-          try {
-            const { data: facCheck } = await supabase
-              .from('faculty')
-              .select('id, name, email')
-              .ilike('email', cleanId)
-              .maybeSingle();
-
-            if (facCheck) {
-              throw new Error(`Access Denied: "${cleanId}" is registered as a Faculty member. Please select the "Faculty / Staff" role to log in.`);
-            }
-
-            const { data: stdCheck } = await supabase
-              .from('students')
-              .select('id, name, roll_no, personal_email')
-              .or(`roll_no.eq.${cleanId},personal_email.ilike.${cleanId}`)
-              .limit(1)
-              .maybeSingle();
-
-            if (stdCheck) {
-              throw new Error(`Access Denied: "${cleanId}" is registered as a Student. Please select the "Student" role to log in.`);
-            }
-          } catch (crossErr) {
-            if (crossErr.message?.includes('Access Denied')) {
-              throw crossErr;
-            }
-          }
-
-          throw new Error(`Access Denied: "${cleanId}" is not authorized as an Administrator.`);
+        // D. If not found in public.admins table or designated whitelist, deny access immediately
+        if (!adminRecord) {
+          await supabase.auth.signOut();
+          throw new Error(`Access Denied: The account "${authenticatedEmail}" is not authorized as an Administrator in institutional records.`);
         }
 
         const sessionPayload = {
           user: {
-            id: admin.id,
-            email: admin.email,
-            name: admin.name || admin.full_name || 'System Administrator',
+            id: adminRecord.id || authRes.user.id,
+            email: adminRecord.email || authenticatedEmail,
+            name: adminRecord.name || adminRecord.full_name || 'System Administrator',
             role: 'admin'
           },
           role: 'admin',
+          token: authRes.session.access_token,
           isSupabase: true,
           loggedAt: new Date().toISOString()
         };
@@ -271,9 +316,12 @@ export class AuthService {
   }
 
   /**
-   * Complete Student Device Passkey Registration or Verification (Called immediately on user button tap)
+   * Complete Student Device Passkey Registration or Verification via Secure Server RPC
    */
-  static async completeStudentDeviceAuth(student, isNewDevice) {
+  static async completeStudentDeviceAuth(student, isNewDevice, enteredPasswordHash = '') {
+    let sessionToken = null;
+    let verifiedStudent = null;
+
     if (isNewDevice || !student.passkey_credential_id) {
       // 1. First-Time Passkey Registration (Hardware Security Enclave)
       const passkeyResult = await registerDevicePasskey({
@@ -287,35 +335,52 @@ export class AuthService {
         throw new Error('Device binding registration was not completed.');
       }
 
-      const { error: bindErr } = await supabase
-        .from('students')
-        .update({
-          passkey_credential_id: passkeyResult.credentialId,
-          passkey_public_key: passkeyResult.publicKey,
-          device_bound_at: passkeyResult.boundAt,
-          device_name: passkeyResult.deviceName
-        })
-        .eq('id', student.id);
+      // Secure Server-Side RPC (Prevents client-side direct updates)
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('bind_and_authorize_student_passkey', {
+        p_student_id: student.id,
+        p_password_hash: enteredPasswordHash,
+        p_passkey_credential_id: passkeyResult.credentialId,
+        p_passkey_public_key: passkeyResult.publicKey,
+        p_device_name: passkeyResult.deviceName
+      });
 
-      if (bindErr) {
-        console.error('Failed to record device passkey:', bindErr);
-        throw new Error('Failed to record device binding in institutional database. Please try again.');
+      if (rpcErr || !rpcRes?.success) {
+        console.error('Server device binding error:', rpcErr || rpcRes);
+        throw new Error(rpcRes?.message || rpcErr?.message || 'Failed to securely bind device in institutional database.');
       }
+
+      sessionToken = rpcRes.session_token;
+      verifiedStudent = rpcRes.student;
     } else {
       // 2. Subsequent Passkey Assertion
       await verifyDevicePasskey(student.passkey_credential_id, student.device_name);
+
+      // Secure Server-Side RPC Verification
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('verify_and_authorize_student_login', {
+        p_student_id: student.id,
+        p_passkey_credential_id: student.passkey_credential_id
+      });
+
+      if (rpcErr || !rpcRes?.success) {
+        console.error('Server passkey verification error:', rpcErr || rpcRes);
+        throw new Error(rpcRes?.message || rpcErr?.message || 'Access Denied: Could not verify device credentials on server.');
+      }
+
+      sessionToken = rpcRes.session_token;
+      verifiedStudent = rpcRes.student;
     }
 
     const sessionPayload = {
       user: {
-        id: student.id,
-        email: student.personal_email || `${student.roll_no}@university.edu`,
-        name: student.name,
-        roll_no: student.roll_no,
-        section_id: student.section_id,
-        section_name: student.sections?.section_name || '2A',
-        class_name: `${student.branch || 'CSE'} - Sem ${student.semester || '3'}`
+        id: verifiedStudent?.id || student.id,
+        email: verifiedStudent?.personal_email || student.personal_email || `${student.roll_no}@university.edu`,
+        name: verifiedStudent?.name || student.name,
+        roll_no: verifiedStudent?.roll_no || student.roll_no,
+        section_id: verifiedStudent?.section_id || student.section_id,
+        section_name: verifiedStudent?.section_name || student.sections?.section_name || '2A',
+        class_name: `${verifiedStudent?.branch || student.branch || 'CSE'} - Sem ${verifiedStudent?.semester || student.semester || '3'}`
       },
+      token: sessionToken,
       role: 'student',
       isSupabase: true,
       loggedAt: new Date().toISOString()
@@ -327,6 +392,51 @@ export class AuthService {
       role: 'student',
       redirectUrl: '/student.html'
     };
+  }
+
+  /**
+   * Validate Active Session with Backend (Prevents localStorage tampering)
+   */
+  static async validateActiveSession() {
+    const session = AuthService.getCurrentSession();
+    if (!session) return null;
+
+    const isLocalDev = typeof import.meta !== 'undefined' && 
+      import.meta.env?.DEV && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    if (session.role === 'student' && session.user?.id) {
+      // Allow direct session validation during local development
+      if (isLocalDev && session.isLocalDev) {
+        return session;
+      }
+
+      if (!session.token) {
+        // Missing backend token -> purge untrusted session
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
+      }
+
+      try {
+        const { data: verifyRes, error } = await supabase.rpc('verify_student_session', {
+          p_student_id: session.user.id,
+          p_session_token: session.token
+        });
+
+        if (error || !verifyRes?.valid) {
+          console.warn('Backend session verification failed:', error || verifyRes?.message);
+          localStorage.removeItem(STORAGE_KEY);
+          return null;
+        }
+
+        return session;
+      } catch (err) {
+        console.warn('Session check network error:', err);
+        return session;
+      }
+    }
+
+    return session;
   }
 
   /**

@@ -20,9 +20,9 @@ export const renderFacultyTopbar = (profile) => `
       </button>
 
       <div class="user-profile-badge">
-        <div class="profile-avatar-circle">${profile?.avatarInitials || 'VG'}</div>
+        <div class="profile-avatar-circle">${profile?.avatarInitials || 'FM'}</div>
         <div class="profile-info">
-          <span class="profile-name">${profile?.name || 'Vishal Gupta'}</span>
+          <span class="profile-name">${profile?.name || 'Faculty Member'}</span>
           <span class="profile-role">${profile?.role || 'Faculty'}</span>
         </div>
       </div>

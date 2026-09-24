@@ -20,65 +20,68 @@ export class AdminService {
   static async getProfile() {
     try {
       const session = AuthService.getCurrentSession();
-      if (session?.user?.email) {
-        if (session.user.name) {
-          const initials = session.user.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase();
-          return {
-            id: session.user.id || 'admin-root',
-            name: session.user.name,
-            email: session.user.email,
-            role: 'Super Administrator',
-            avatarInitials: initials || 'AD'
-          };
-        }
-
-        const { data, error } = await supabase
-          .from('admins')
-          .select('*')
-          .eq('email', session.user.email)
-          .maybeSingle();
-
-        if (data && !error) {
-          return {
-            id: data.id,
-            name: data.name,
-            email: data.email,
-            role: data.role || 'Administrator',
-            avatarInitials: data.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-          };
-        }
-
-        return {
-          id: session.user.id,
-          name: session.user.name || session.user.email.split('@')[0],
-          email: session.user.email,
-          role: 'Administrator',
-          avatarInitials: (session.user.name || 'Admin').slice(0, 2).toUpperCase()
-        };
+      if (!session?.user || session.role !== 'admin') {
+        return null;
       }
 
-      // Check first admin in database
-      const { data } = await supabase.from('admins').select('*').limit(1).maybeSingle();
-      if (data) {
+      const email = (session.user.email || '').trim().toLowerCase();
+      if (!email) return null;
+
+      // 1. Verify existence in public.admins database table
+      const { data, error } = await supabase
+        .from('admins')
+        .select('*')
+        .ilike('email', email)
+        .maybeSingle();
+
+      if (data && !error) {
         return {
           id: data.id,
-          name: data.name,
+          name: data.name || data.full_name || 'System Administrator',
           email: data.email,
-          role: data.role || 'Super Admin',
-          avatarInitials: data.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+          role: data.role || 'Administrator',
+          avatarInitials: (data.name || 'AD').split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
         };
       }
+
+      // 2. Fallback to designated institutional super admin whitelist
+      const designatedAdmins = {
+        'vishalgupta@liet.in': { name: 'Vishal Gupta', role: 'Super Admin', id: 'admin-vishal-gupta' },
+        'admin@liet.in': { name: 'System Administrator', role: 'Super Admin', id: 'admin-liet' },
+        'admin@presently.edu': { name: 'System Administrator', role: 'Super Admin', id: 'admin-presently' },
+        'admin@university.edu': { name: 'System Administrator', role: 'Super Admin', id: 'admin-university' }
+      };
+
+      if (designatedAdmins[email]) {
+        const acc = designatedAdmins[email];
+        return {
+          id: acc.id,
+          name: acc.name,
+          email: email,
+          role: acc.role,
+          avatarInitials: acc.name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
+        };
+      }
+
+      // If email is not in public.admins or whitelist, invalidate session
+      localStorage.removeItem('presently_auth_session');
+      return null;
     } catch (err) {
       console.warn('Could not fetch real admin profile:', err);
     }
 
-    return {
-      id: 'admin-root',
-      name: 'Vishal Gupta',
-      email: 'vishalgupta@liet.in',
-      role: 'Super Administrator',
-      avatarInitials: 'VG'
-    };
+    return null;
+  }
+
+  /**
+   * Helper: Assert active administrator session before any mutation
+   */
+  static assertAdminSession() {
+    const session = AuthService.getCurrentSession();
+    if (!session?.user || session.role !== 'admin') {
+      throw new Error('Access Denied: You must be logged in as an administrator to perform this action.');
+    }
+    return session.user;
   }
 
   /**
@@ -98,13 +101,15 @@ export class AdminService {
   }
 
   static async addFaculty(facultyData) {
+    AdminService.assertAdminSession();
+
     const { data, error } = await supabase
       .from('faculty')
       .insert([
         {
           name: (facultyData.name || '').trim(),
           email: (facultyData.email || '').trim().toLowerCase(),
-          department: facultyData.department || 'Computer Science & Engineering'
+          department: (facultyData.department || '').trim() || null
         }
       ])
       .select()
@@ -134,6 +139,8 @@ export class AdminService {
   }
 
   static async addSubject(subjectData) {
+    AdminService.assertAdminSession();
+
     const { data, error } = await supabase
       .from('subjects')
       .insert([
@@ -170,6 +177,8 @@ export class AdminService {
   }
 
   static async addSection(sectionData) {
+    AdminService.assertAdminSession();
+
     const { data, error } = await supabase
       .from('sections')
       .insert([
@@ -215,6 +224,8 @@ export class AdminService {
   }
 
   static async addStudent(studentData) {
+    AdminService.assertAdminSession();
+
     const payload = {
       name: (studentData.name || '').trim(),
       roll_no: (studentData.rollNo || '').trim().toUpperCase(),
@@ -239,6 +250,39 @@ export class AdminService {
       throw error;
     }
     return data;
+  }
+
+  static async deleteStudent(studentId) {
+    const admin = AdminService.assertAdminSession();
+
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('admin_delete_student', {
+        p_student_id: studentId,
+        p_admin_email: admin.email
+      });
+
+      if (!rpcErr && rpcRes?.success) {
+        return true;
+      }
+      if (rpcRes && rpcRes.success === false) {
+        throw new Error(rpcRes.message || 'Failed to delete student.');
+      }
+    } catch (err) {
+      if (err.message && err.message.includes('Access Denied')) {
+        throw err;
+      }
+    }
+
+    const { error } = await supabase
+      .from('students')
+      .delete()
+      .eq('id', studentId);
+
+    if (error) {
+      console.error('Error deleting student:', error);
+      throw error;
+    }
+    return true;
   }
 
   /**
@@ -277,6 +321,8 @@ export class AdminService {
   }
 
   static async assignFaculty(assignmentData) {
+    AdminService.assertAdminSession();
+
     // 1. Resolve slots list (Individual date, start_time, end_time, room_no per lecture)
     let slots = [];
     if (Array.isArray(assignmentData.slots) && assignmentData.slots.length > 0) {
@@ -332,6 +378,8 @@ export class AdminService {
   }
 
   static async updateAssignment(id, updateData) {
+    AdminService.assertAdminSession();
+
     const payload = {};
     if (updateData.startTime) payload.start_time = updateData.startTime;
     if (updateData.endTime) payload.end_time = updateData.endTime;
@@ -357,6 +405,26 @@ export class AdminService {
   }
 
   static async deleteAssignment(id) {
+    const admin = AdminService.assertAdminSession();
+
+    try {
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('admin_delete_assignment', {
+        p_assignment_id: id,
+        p_admin_email: admin.email
+      });
+
+      if (!rpcErr && rpcRes?.success) {
+        return true;
+      }
+      if (rpcRes && rpcRes.success === false) {
+        throw new Error(rpcRes.message || 'Failed to delete assignment.');
+      }
+    } catch (err) {
+      if (err.message && err.message.includes('Access Denied')) {
+        throw err;
+      }
+    }
+
     const { error } = await supabase
       .from('faculty_assignment')
       .delete()
@@ -370,20 +438,27 @@ export class AdminService {
   }
 
   /**
-   * Reset a student's bound device / passkey
+   * Reset a student's bound device / passkey (Admin Guarded)
    */
   static async resetStudentDevice(studentId) {
+    const admin = AdminService.assertAdminSession();
+
     try {
-      // 1. Try stored procedure if available
       const { data: rpcRes, error: rpcErr } = await supabase.rpc('reset_student_device', {
-        p_student_id: studentId
+        p_student_id: studentId,
+        p_admin_email: admin.email
       });
 
       if (!rpcErr && rpcRes?.success) {
         return rpcRes;
       }
-    } catch {
-      // fallback
+      if (rpcRes && rpcRes.success === false) {
+        throw new Error(rpcRes.message || 'Failed to reset student device.');
+      }
+    } catch (err) {
+      if (err.message && err.message.includes('Access Denied')) {
+        throw err;
+      }
     }
 
     // Direct table update fallback
@@ -393,7 +468,9 @@ export class AdminService {
         passkey_credential_id: null,
         passkey_public_key: null,
         device_bound_at: null,
-        device_name: null
+        device_name: null,
+        session_token: null,
+        session_expires_at: null
       })
       .eq('id', studentId)
       .select()

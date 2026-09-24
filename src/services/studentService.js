@@ -1,5 +1,5 @@
 import { supabase, getCurrentUserProfile } from '../lib/supabaseClient.js';
-import { verifyTotpPayload } from '../utils/totpCrypto.js';
+import { verifyTotpPayload, hashPassword, validateStrongPassword } from '../utils/totpCrypto.js';
 import { getIndianDateString, getIndianTimeVal, formatIndianDate, formatIndianTime } from '../utils/dateUtils.js';
 
 /**
@@ -125,7 +125,7 @@ export class StudentService {
           semester: student.semester || student.sections?.semester || '3rd',
           branch: student.branch || student.sections?.branch || 'CSE',
           className: `${student.branch || 'CSE'} - ${student.semester || student.sections?.semester || '3rd'} Sem`,
-          department: 'Computer Science & Engineering',
+          department: student.branch || student.sections?.branch || '',
           attendedClasses: attended,
           totalClasses: total,
           attendancePercentage: percentage
@@ -147,7 +147,7 @@ export class StudentService {
       semester: '4th',
       branch: 'CSE',
       className: 'B.Tech CSE - 4th Sem',
-      department: 'Computer Science & Engineering',
+      department: 'CSE',
       attendedClasses: 0,
       totalClasses: 0,
       attendancePercentage: 100
@@ -155,7 +155,7 @@ export class StudentService {
   }
 
   /**
-   * Updates student contact and personal details in Supabase
+   * Securely updates student contact and personal details via PostgreSQL RPC
    */
   static async updateProfile(studentId, updates = {}) {
     try {
@@ -163,26 +163,88 @@ export class StudentService {
         return { success: true, message: 'Demo profile updated successfully.' };
       }
 
-      const payload = {};
-      if (updates.name !== undefined) payload.name = updates.name.trim();
-      if (updates.personalEmail !== undefined) payload.personal_email = updates.personalEmail.trim();
-      if (updates.phone !== undefined) payload.phone = updates.phone.trim();
-      if (updates.parentContact !== undefined) payload.parent_contact = updates.parentContact.trim();
-      if (updates.admissionId !== undefined) payload.admission_id = updates.admissionId.trim();
-      if (updates.dateOfBirth !== undefined) payload.date_of_birth = updates.dateOfBirth || null;
+      // 1. Get active session token
+      let sessionToken = '';
+      try {
+        const raw = localStorage.getItem('presently_auth_session');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          sessionToken = parsed?.token || '';
+        }
+      } catch (e) {
+        console.warn('Session read error:', e);
+      }
 
-      const { data, error } = await supabase
-        .from('students')
-        .update(payload)
-        .eq('id', studentId)
-        .select('*, sections:section_id(id, section_name, branch, semester)')
-        .single();
+      // 2. Call secure PostgreSQL RPC (Prevents unauthorized direct table updates)
+      const { data, error } = await supabase.rpc('update_student_profile', {
+        p_student_id: studentId,
+        p_session_token: sessionToken,
+        p_name: updates.name !== undefined ? updates.name.trim() : null,
+        p_personal_email: updates.personalEmail !== undefined ? updates.personalEmail.trim() : null,
+        p_phone: updates.phone !== undefined ? updates.phone.trim() : null,
+        p_parent_contact: updates.parentContact !== undefined ? updates.parentContact.trim() : null,
+        p_admission_id: updates.admissionId !== undefined ? updates.admissionId.trim() : null,
+        p_date_of_birth: updates.dateOfBirth || null
+      });
 
       if (error) throw error;
-      return { success: true, message: 'Profile updated successfully!', student: data };
+      if (!data?.success) {
+        throw new Error(data?.message || 'Profile update failed.');
+      }
+
+      return { success: true, message: data.message || 'Profile updated successfully!', student: data.student };
     } catch (err) {
       console.error('Failed to update student profile:', err);
       return { success: false, message: err?.message || 'Failed to update profile' };
+    }
+  }
+
+  /**
+   * Securely Updates Student Password via PostgreSQL RPC
+   */
+  static async changePassword(studentId, currentPassword, newPassword) {
+    try {
+      if (!studentId) {
+        throw new Error('Student ID is required.');
+      }
+      
+      const pwdCheck = validateStrongPassword(newPassword);
+      if (!pwdCheck.isValid) {
+        throw new Error(pwdCheck.message);
+      }
+
+      // 1. Get active session token
+      let sessionToken = '';
+      try {
+        const raw = localStorage.getItem('presently_auth_session');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          sessionToken = parsed?.token || '';
+        }
+      } catch (e) {
+        console.warn('Session read error:', e);
+      }
+
+      const currentHash = currentPassword ? await hashPassword(currentPassword) : '';
+      const newHash = await hashPassword(newPassword);
+
+      // 2. Call secure PostgreSQL RPC
+      const { data, error } = await supabase.rpc('change_student_password', {
+        p_student_id: studentId,
+        p_current_password_hash: currentHash,
+        p_new_password_hash: newHash,
+        p_session_token: sessionToken
+      });
+
+      if (error) throw error;
+      if (!data?.success) {
+        throw new Error(data?.message || 'Password update failed.');
+      }
+
+      return { success: true, message: data.message };
+    } catch (err) {
+      console.error('Change password error:', err);
+      return { success: false, message: err?.message || 'Failed to change password.' };
     }
   }
 

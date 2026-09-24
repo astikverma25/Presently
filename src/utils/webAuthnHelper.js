@@ -86,6 +86,7 @@ export async function registerDevicePasskey(student) {
       { alg: -257, type: 'public-key' } // RS256 (RSA with SHA-256)
     ],
     authenticatorSelection: {
+      authenticatorAttachment: 'platform',
       userVerification: 'preferred',
       residentKey: 'preferred',
       requireResidentKey: false

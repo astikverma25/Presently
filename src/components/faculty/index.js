@@ -1,6 +1,6 @@
 import { QRGenerator } from '../../utils/qrGenerator.js';
 import { getLocalDateString } from '../../utils/dateUtils.js';
-import { createDynamicQRPayload } from '../../utils/totpCrypto.js';
+import { createDynamicQRPayload, validateStrongPassword } from '../../utils/totpCrypto.js';
 import { renderFacultySidebar } from './FacultySidebar.js';
 import { renderFacultyTopbar } from './FacultyTopbar.js';
 import { renderFacultyOverview } from './FacultyOverview.js';
@@ -8,6 +8,7 @@ import { renderFacultyLecturesView } from './FacultyLecturesView.js';
 import { renderFacultyQRSession } from './FacultyQRSession.js';
 import { renderStudentStreamItem } from './StudentStreamItem.js';
 import { renderFacultyAttendanceRecord } from './FacultyAttendanceRecord.js';
+import { renderFacultySettingsView } from './FacultySettingsView.js';
 import { FacultyService } from '../../services/facultyService.js';
 import { QRSessionService } from '../../services/qrSessionService.js';
 import { AttendanceService } from '../../services/attendanceService.js';
@@ -62,6 +63,25 @@ export class FacultyDashboardApp {
 
     try {
       this.profile = await FacultyService.getProfile();
+
+      if (!this.profile || !this.profile.id) {
+        // Strict Auth Guard: User is not logged in as a faculty member
+        this.container.innerHTML = `
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; padding: 24px; text-align: center; font-family: var(--font-sans); background: #F8FAFC;">
+            <div style="width: 56px; height: 56px; border-radius: 50%; background: #EEF2FF; color: #4F46E5; display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 16px;">
+              🔒
+            </div>
+            <h2 style="font-size: 18px; font-weight: 700; color: #1E293B; margin-bottom: 8px;">Faculty Login Required</h2>
+            <p style="font-size: 13px; color: #64748B; max-width: 300px; margin-bottom: 20px;">Please log in with your faculty institutional credentials to access this portal.</p>
+            <a href="/index.html" style="display: inline-block; padding: 10px 22px; background: #4F46E5; color: #FFFFFF; font-weight: 600; font-size: 13px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);">Go to Login</a>
+          </div>
+        `;
+        setTimeout(() => {
+          window.location.href = '/index.html';
+        }, 1000);
+        return;
+      }
+
       this.rawAssignments = await FacultyService.getAllAssignments(this.profile?.id);
       this.lectures = FacultyService.filterAndSortLectures(this.rawAssignments, this.lectureFilter, this.selectedLectureDate);
       this.kpis = await FacultyService.getKPIs(this.profile?.id, this.lectures);
@@ -233,6 +253,8 @@ export class FacultyDashboardApp {
         },
         this.rawAssignments
       );
+    } else if (this.currentTab === 'settings') {
+      mainViewHTML = renderFacultySettingsView(this.profile);
     } else {
       const todayLectures = FacultyService.filterAndSortLectures(
         this.rawAssignments, 
@@ -760,6 +782,182 @@ export class FacultyDashboardApp {
           }
           await this.refreshAttendance();
           await this.render();
+        });
+      }
+    }
+
+    // 8. Settings Tab Handlers (Change Password & Change Email)
+    if (this.currentTab === 'settings') {
+      // Toggle password field visibility
+      this.container.querySelectorAll('.btn-toggle-fac-pwd').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const targetId = btn.getAttribute('data-target');
+          const input = this.container.querySelector(`#${targetId}`);
+          if (input) {
+            if (input.type === 'password') {
+              input.type = 'text';
+              btn.textContent = '🙈';
+            } else {
+              input.type = 'password';
+              btn.textContent = '👁️';
+            }
+          }
+        });
+      });
+
+      // Change Password Form Submit
+      const pwdForm = this.container.querySelector('#form-faculty-change-password');
+      if (pwdForm) {
+        pwdForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const currentPwd = pwdForm.querySelector('#faculty-current-password')?.value || '';
+          const newPwd = pwdForm.querySelector('#faculty-new-password')?.value || '';
+          const confirmPwd = pwdForm.querySelector('#faculty-confirm-password')?.value || '';
+          const feedbackBox = this.container.querySelector('#faculty-pwd-feedback');
+          const submitBtn = pwdForm.querySelector('#btn-save-faculty-pwd');
+          const btnText = submitBtn?.querySelector('.btn-text');
+          const btnSpinner = submitBtn?.querySelector('.btn-spinner');
+
+          if (!currentPwd) {
+            if (feedbackBox) {
+              feedbackBox.style.display = 'block';
+              feedbackBox.style.background = '#FEE2E2';
+              feedbackBox.style.color = '#B91C1C';
+              feedbackBox.textContent = 'Please enter your current password.';
+            }
+            return;
+          }
+
+          const pwdCheck = validateStrongPassword(newPwd);
+          if (!pwdCheck.isValid) {
+            if (feedbackBox) {
+              feedbackBox.style.display = 'block';
+              feedbackBox.style.background = '#FEE2E2';
+              feedbackBox.style.color = '#B91C1C';
+              feedbackBox.textContent = pwdCheck.message;
+            }
+            return;
+          }
+
+          if (newPwd !== confirmPwd) {
+            if (feedbackBox) {
+              feedbackBox.style.display = 'block';
+              feedbackBox.style.background = '#FEE2E2';
+              feedbackBox.style.color = '#B91C1C';
+              feedbackBox.textContent = 'New password and confirmation do not match.';
+            }
+            return;
+          }
+
+          if (submitBtn) submitBtn.disabled = true;
+          if (btnText) btnText.textContent = 'Updating...';
+          if (btnSpinner) btnSpinner.style.display = 'inline-block';
+          if (feedbackBox) feedbackBox.style.display = 'none';
+
+          try {
+            const res = await FacultyService.changePassword(currentPwd, newPwd);
+            if (res.success) {
+              if (feedbackBox) {
+                feedbackBox.style.display = 'block';
+                feedbackBox.style.background = '#ECFDF5';
+                feedbackBox.style.color = '#047857';
+                feedbackBox.textContent = 'Password updated successfully in Supabase Auth!';
+              }
+              pwdForm.reset();
+            } else {
+              if (feedbackBox) {
+                feedbackBox.style.display = 'block';
+                feedbackBox.style.background = '#FEE2E2';
+                feedbackBox.style.color = '#B91C1C';
+                feedbackBox.textContent = res.message || 'Failed to update password.';
+              }
+            }
+          } catch (err) {
+            if (feedbackBox) {
+              feedbackBox.style.display = 'block';
+              feedbackBox.style.background = '#FEE2E2';
+              feedbackBox.style.color = '#B91C1C';
+              feedbackBox.textContent = err?.message || 'Error updating password.';
+            }
+          } finally {
+            if (submitBtn) submitBtn.disabled = false;
+            if (btnText) btnText.textContent = 'Update Password';
+            if (btnSpinner) btnSpinner.style.display = 'none';
+          }
+        });
+      }
+
+      // Change Email Form Submit
+      const emailForm = this.container.querySelector('#form-faculty-change-email');
+      if (emailForm) {
+        emailForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const currentPwd = emailForm.querySelector('#faculty-email-current-password')?.value || '';
+          const newEmail = emailForm.querySelector('#faculty-new-email')?.value || '';
+          const feedbackBox = this.container.querySelector('#faculty-email-feedback');
+          const submitBtn = emailForm.querySelector('#btn-save-faculty-email');
+          const btnText = submitBtn?.querySelector('.btn-text');
+          const btnSpinner = submitBtn?.querySelector('.btn-spinner');
+
+          if (!currentPwd) {
+            if (feedbackBox) {
+              feedbackBox.style.display = 'block';
+              feedbackBox.style.background = '#FEE2E2';
+              feedbackBox.style.color = '#B91C1C';
+              feedbackBox.textContent = 'Please enter your current password for security verification.';
+            }
+            return;
+          }
+
+          if (!newEmail || !newEmail.includes('@')) {
+            if (feedbackBox) {
+              feedbackBox.style.display = 'block';
+              feedbackBox.style.background = '#FEE2E2';
+              feedbackBox.style.color = '#B91C1C';
+              feedbackBox.textContent = 'Please enter a valid email address.';
+            }
+            return;
+          }
+
+          if (submitBtn) submitBtn.disabled = true;
+          if (btnText) btnText.textContent = 'Updating...';
+          if (btnSpinner) btnSpinner.style.display = 'inline-block';
+          if (feedbackBox) feedbackBox.style.display = 'none';
+
+          try {
+            const res = await FacultyService.changeEmail(this.profile?.id, newEmail, currentPwd);
+            if (res.success) {
+              if (feedbackBox) {
+                feedbackBox.style.display = 'block';
+                feedbackBox.style.background = '#ECFDF5';
+                feedbackBox.style.color = '#047857';
+                feedbackBox.textContent = res.message || 'Email updated successfully in both Supabase Auth and database!';
+              }
+              // Refresh profile
+              this.profile = await FacultyService.getProfile();
+              setTimeout(async () => {
+                await this.render();
+              }, 1200);
+            } else {
+              if (feedbackBox) {
+                feedbackBox.style.display = 'block';
+                feedbackBox.style.background = '#FEE2E2';
+                feedbackBox.style.color = '#B91C1C';
+                feedbackBox.textContent = res.message || 'Failed to update email.';
+              }
+            }
+          } catch (err) {
+            if (feedbackBox) {
+              feedbackBox.style.display = 'block';
+              feedbackBox.style.background = '#FEE2E2';
+              feedbackBox.style.color = '#B91C1C';
+              feedbackBox.textContent = err?.message || 'Error updating email.';
+            }
+          } finally {
+            if (submitBtn) submitBtn.disabled = false;
+            if (btnText) btnText.textContent = 'Update Email in Auth & DB';
+            if (btnSpinner) btnSpinner.style.display = 'none';
+          }
         });
       }
     }

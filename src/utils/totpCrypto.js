@@ -34,6 +34,36 @@ export async function hashPassword(plainPassword, salt = 'PRESENTLY_STUDENT_SALT
 }
 
 /**
+ * Validates strong password rules:
+ * - At least 8 characters
+ * - At least 1 uppercase letter (A-Z)
+ * - At least 1 lowercase letter (a-z)
+ * - At least 1 number (0-9)
+ * - At least 1 special character (!@#$%^&* etc.)
+ */
+export function validateStrongPassword(password) {
+  if (!password || typeof password !== 'string') {
+    return { isValid: false, message: 'Password cannot be empty.' };
+  }
+  if (password.length < 8) {
+    return { isValid: false, message: 'Password must be at least 8 characters long.' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { isValid: false, message: 'Password must contain at least one uppercase letter (A-Z).' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { isValid: false, message: 'Password must contain at least one lowercase letter (a-z).' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { isValid: false, message: 'Password must contain at least one number (0-9).' };
+  }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)) {
+    return { isValid: false, message: 'Password must contain at least one special character (e.g. !@#$%^&*).' };
+  }
+  return { isValid: true };
+}
+
+/**
  * Generates an HMAC-SHA256 signature for a session at a specific timestamp
  */
 export async function generateTotpSignature(sessionId, timestamp, secret = SYSTEM_HMAC_SECRET) {

@@ -8,6 +8,7 @@ import { renderStudentProfileModal } from './StudentProfileModal.js';
 import { showScanFeedbackModal } from './ScanFeedbackModal.js';
 import { StudentService } from '../../services/studentService.js';
 import { QRScanner } from '../qr/QRScanner.js';
+import { validateStrongPassword } from '../../utils/totpCrypto.js';
 
 /**
  * Master Student Dashboard Module Coordinator (Mobile-Responsive & Drawer-Enabled)
@@ -234,7 +235,149 @@ export class StudentDashboardApp {
       });
     }
 
-    // 4. Profile Form Change Tracking & Submit
+    // 4. Profile Tabs & Modal Controls
+    const tabBtnPersonal = this.container.querySelector('#tab-btn-personal');
+    const tabBtnSecurity = this.container.querySelector('#tab-btn-security');
+    const passwordForm = this.container.querySelector('#form-change-student-password');
+    const cancelPasswordBtn = this.container.querySelector('#btn-cancel-password-change');
+    const feedbackBox = this.container.querySelector('#profile-update-feedback');
+
+    const switchProfileTab = (tab) => {
+      if (feedbackBox) feedbackBox.style.display = 'none';
+      if (tab === 'personal') {
+        if (tabBtnPersonal) {
+          tabBtnPersonal.classList.add('active');
+          tabBtnPersonal.style.background = '#FFFFFF';
+          tabBtnPersonal.style.color = '#4338CA';
+          tabBtnPersonal.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+        }
+        if (tabBtnSecurity) {
+          tabBtnSecurity.classList.remove('active');
+          tabBtnSecurity.style.background = 'transparent';
+          tabBtnSecurity.style.color = '#64748B';
+          tabBtnSecurity.style.boxShadow = 'none';
+        }
+        if (profileForm) profileForm.style.display = 'block';
+        if (passwordForm) passwordForm.style.display = 'none';
+      } else if (tab === 'security') {
+        if (tabBtnSecurity) {
+          tabBtnSecurity.classList.add('active');
+          tabBtnSecurity.style.background = '#FFFFFF';
+          tabBtnSecurity.style.color = '#4338CA';
+          tabBtnSecurity.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+        }
+        if (tabBtnPersonal) {
+          tabBtnPersonal.classList.remove('active');
+          tabBtnPersonal.style.background = 'transparent';
+          tabBtnPersonal.style.color = '#64748B';
+          tabBtnPersonal.style.boxShadow = 'none';
+        }
+        if (profileForm) profileForm.style.display = 'none';
+        if (passwordForm) passwordForm.style.display = 'block';
+      }
+    };
+
+    if (tabBtnPersonal) tabBtnPersonal.addEventListener('click', () => switchProfileTab('personal'));
+    if (tabBtnSecurity) tabBtnSecurity.addEventListener('click', () => switchProfileTab('security'));
+    if (cancelPasswordBtn) cancelPasswordBtn.addEventListener('click', closeProfileModal);
+
+    // Password visibility toggle buttons
+    this.container.querySelectorAll('.btn-toggle-pwd-field').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-target');
+        const input = this.container.querySelector(`#${targetId}`);
+        if (input) {
+          if (input.type === 'password') {
+            input.type = 'text';
+            btn.textContent = '🙈';
+          } else {
+            input.type = 'password';
+            btn.textContent = '👁️';
+          }
+        }
+      });
+    });
+
+    // 5. Change Password Form Submit
+    if (passwordForm) {
+      const submitPwdBtn = passwordForm.querySelector('#btn-submit-password');
+      const btnPwdText = submitPwdBtn?.querySelector('.btn-pwd-text');
+      const btnPwdSpinner = submitPwdBtn?.querySelector('.btn-pwd-spinner');
+
+      passwordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const currentPassword = passwordForm.querySelector('#pwd-current')?.value || '';
+        const newPassword = passwordForm.querySelector('#pwd-new')?.value || '';
+        const confirmPassword = passwordForm.querySelector('#pwd-confirm')?.value || '';
+
+        if (!currentPassword) {
+          if (feedbackBox) {
+            feedbackBox.className = 'profile-feedback-box error';
+            feedbackBox.textContent = 'Please enter your current password.';
+            feedbackBox.style.display = 'block';
+          }
+          return;
+        }
+
+        const pwdCheck = validateStrongPassword(newPassword);
+        if (!pwdCheck.isValid) {
+          if (feedbackBox) {
+            feedbackBox.className = 'profile-feedback-box error';
+            feedbackBox.textContent = pwdCheck.message;
+            feedbackBox.style.display = 'block';
+          }
+          return;
+        }
+
+        if (newPassword !== confirmPassword) {
+          if (feedbackBox) {
+            feedbackBox.className = 'profile-feedback-box error';
+            feedbackBox.textContent = 'New password and confirmation do not match.';
+            feedbackBox.style.display = 'block';
+          }
+          return;
+        }
+
+        if (submitPwdBtn) submitPwdBtn.disabled = true;
+        if (btnPwdText) btnPwdText.textContent = 'Updating...';
+        if (btnPwdSpinner) btnPwdSpinner.style.display = 'inline-block';
+        if (feedbackBox) feedbackBox.style.display = 'none';
+
+        try {
+          const res = await StudentService.changePassword(this.profile?.id, currentPassword, newPassword);
+
+          if (res.success) {
+            if (feedbackBox) {
+              feedbackBox.className = 'profile-feedback-box success';
+              feedbackBox.textContent = res.message || 'Password changed successfully!';
+              feedbackBox.style.display = 'block';
+            }
+            passwordForm.reset();
+            setTimeout(() => {
+              closeProfileModal();
+            }, 1200);
+          } else {
+            if (feedbackBox) {
+              feedbackBox.className = 'profile-feedback-box error';
+              feedbackBox.textContent = res.message || 'Failed to update password.';
+              feedbackBox.style.display = 'block';
+            }
+          }
+        } catch (err) {
+          if (feedbackBox) {
+            feedbackBox.className = 'profile-feedback-box error';
+            feedbackBox.textContent = err?.message || 'Error updating password.';
+            feedbackBox.style.display = 'block';
+          }
+        } finally {
+          if (submitPwdBtn) submitPwdBtn.disabled = false;
+          if (btnPwdText) btnPwdText.textContent = 'Update Password';
+          if (btnPwdSpinner) btnPwdSpinner.style.display = 'none';
+        }
+      });
+    }
+
+    // 6. Profile Form Change Tracking & Submit
     if (profileForm) {
       const saveBtn = this.container.querySelector('#btn-save-profile');
       const trackedInputs = profileForm.querySelectorAll('.profile-track-change');
@@ -268,7 +411,6 @@ export class StudentDashboardApp {
 
       profileForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const feedbackBox = this.container.querySelector('#profile-update-feedback');
         const btnText = saveBtn?.querySelector('.btn-text');
         const btnSpinner = saveBtn?.querySelector('.btn-spinner');
 
