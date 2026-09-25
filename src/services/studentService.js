@@ -751,12 +751,16 @@ export class StudentService {
           p_student_id: activeStudentId
         });
 
+        if (rpcErr) {
+          console.warn('[StudentService] submit_student_qr_scan RPC notice:', rpcErr);
+        }
+
         if (!rpcErr && rpcData) {
           return rpcData;
         }
       }
     } catch (rpcEx) {
-      console.warn('RPC fast-path fallback:', rpcEx);
+      console.warn('[StudentService] RPC fast-path fallback:', rpcEx);
     }
 
     // 3. Fallback direct client resolution (for offline mocks or standard queries)
@@ -784,6 +788,7 @@ export class StudentService {
           .single();
 
         if (sessErr || !sessData) {
+          console.warn('[StudentService] Fallback direct query error:', sessErr);
           return { success: false, message: 'Attendance session not found or already closed.' };
         }
         session = sessData;

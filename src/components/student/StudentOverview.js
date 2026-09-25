@@ -29,13 +29,21 @@ export const renderStudentOverview = (profile, currentLecture, historyList = [])
     </div>
   `).join('');
 
+  // Format faculty name directly with 'Prof.' prefix (without 'Faculty:' label)
+  let facultyDisplay = '';
+  if (currentLecture?.facultyName && currentLecture.facultyName !== '—' && currentLecture.facultyName.trim() !== '') {
+    const rawName = currentLecture.facultyName.trim().replace(/^Faculty:\s*/i, '');
+    const cleanName = rawName.startsWith('Prof.') ? rawName : `Prof. ${rawName}`;
+    facultyDisplay = `• ${cleanName}`;
+  }
+
   return `
     <!-- 1. Overall Attendance Card -->
     <div class="student-stat-card">
       <div class="stat-left">
         <h3>Overall Attendance</h3>
-        <div class="percent-big" style="color: ${isEligible ? 'var(--primary-color, #4338CA)' : '#E11D48'};">${pct}%</div>
-        <p style="color: ${isEligible ? '#10B981' : '#E11D48'}; font-weight: 600;">
+        <div class="percent-big" style="color: ${isEligible ? '#FFFFFF' : '#FECDD3'};">${pct}%</div>
+        <p style="color: ${isEligible ? '#6EE7B7' : '#FCA5A5'}; font-weight: 600;">
           ${isEligible ? 'Eligible for examinations (≥ 75%)' : 'Attendance below required 75% threshold'}
         </p>
       </div>
@@ -54,7 +62,7 @@ export const renderStudentOverview = (profile, currentLecture, historyList = [])
       </div>
 
       <h4>${currentLecture?.subjectName || 'No Class Scheduled'}</h4>
-      <p>${currentLecture?.timeWindow || ''} ${currentLecture?.facultyName && currentLecture.facultyName !== '—' ? `• Faculty: ${currentLecture.facultyName}` : ''}</p>
+      <p>${currentLecture?.timeWindow || ''} ${facultyDisplay}</p>
 
       <button type="button" class="btn-scan-main" id="btn-open-scanner">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">

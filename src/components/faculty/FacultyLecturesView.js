@@ -1,19 +1,25 @@
 import { renderLectureCard } from './LectureCard.js';
 import { renderFacultyLecturesStrip } from './FacultyLecturesStrip.js';
+import { renderFacultyTimetableView } from './FacultyTimetableView.js';
 import { formatLocalDate, getLocalDateString } from '../../utils/dateUtils.js';
 
 /**
  * Dedicated "My Lectures" Tab Screen Component
- * @param {Array} lectures - filtered and sorted lectures (current to upcoming)
+ * Supports both standard List View and Excel-style Weekly Timetable Grid View
+ * @param {Array} lectures - filtered and sorted lectures (for list view)
  * @param {string} currentFilter - 'today' | 'yesterday' | 'tomorrow' | 'this_week' | 'custom'
  * @param {string} selectedDate - 'YYYY-MM-DD'
- * @param {Array} allAssignments - total assigned classes
+ * @param {Array} allAssignments - total assigned classes for this faculty
+ * @param {string} viewMode - 'list' | 'timetable' (default: 'list')
+ * @param {number} weekOffset - 0 for current week, -1, +1, etc.
  */
 export const renderFacultyLecturesView = (
   lectures = [], 
   currentFilter = 'today', 
   selectedDate = getLocalDateString(),
-  allAssignments = []
+  allAssignments = [],
+  viewMode = 'list',
+  weekOffset = 0
 ) => {
   const filterStripHTML = renderFacultyLecturesStrip(currentFilter, selectedDate);
 
@@ -55,34 +61,82 @@ export const renderFacultyLecturesView = (
     `;
 
   const liveCount = lectures.filter(l => l.status === 'live').length;
-  const upcomingCount = lectures.filter(l => l.status === 'upcoming' || l.status === 'starting_soon' || l.status === 'scheduled').length;
 
   return `
     <div class="my-lectures-view-container">
-      <!-- Header -->
-      <div class="content-header-row">
+      <!-- Header with View Switcher Pill in front of My Lectures -->
+      <div class="content-header-row lectures-top-header">
         <div class="content-header-titles">
-          <h1>My Lectures</h1>
-          <p>Filter your schedule, manage timetable classes, and start QR check-in sessions</p>
+          <div class="lectures-title-with-actions">
+            <h1>My Lectures</h1>
+            
+            <!-- View Toggle Switcher (List vs Timetable Grid) -->
+            <div class="lecture-view-switcher" role="group" aria-label="Schedule View Mode">
+              <button 
+                type="button" 
+                class="btn-view-toggle ${viewMode === 'list' ? 'active' : ''}" 
+                id="btn-view-list" 
+                data-lecture-view="list"
+                title="Switch to List & Card View"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <line x1="8" y1="6" x2="21" y2="6"></line>
+                  <line x1="8" y1="12" x2="21" y2="12"></line>
+                  <line x1="8" y1="18" x2="21" y2="18"></line>
+                  <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                  <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                  <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+                <span>List View</span>
+              </button>
+
+              <button 
+                type="button" 
+                class="btn-view-toggle ${viewMode === 'timetable' ? 'active' : ''}" 
+                id="btn-view-timetable" 
+                data-lecture-view="timetable"
+                title="Switch to Excel Weekly Timetable Grid"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="3" y1="9" x2="21" y2="9"></line>
+                  <line x1="3" y1="15" x2="21" y2="15"></line>
+                  <line x1="9" y1="3" x2="9" y2="21"></line>
+                  <line x1="15" y1="3" x2="15" y2="21"></line>
+                </svg>
+                <span>Timetable Grid</span>
+              </button>
+            </div>
+          </div>
+          <p>${viewMode === 'timetable' ? 'Weekly schedule grid and timetable view for your assigned classes' : 'Filter your schedule, manage timetable classes, and start QR check-in sessions'}</p>
         </div>
+
         <div class="lecture-header-stats-badge">
           ${liveCount > 0 ? `<span class="live-status-pill"><span class="pulse-indicator-dot dot-live"></span>${liveCount} Class Live Now</span>` : ''}
-          <span class="lectures-count-pill">${lectures.length} ${lectures.length === 1 ? 'Lecture' : 'Lectures'}</span>
+          <span class="lectures-count-pill">${viewMode === 'timetable' ? `${allAssignments.length} Total Assigned` : `${lectures.length} ${lectures.length === 1 ? 'Lecture' : 'Lectures'}`}</span>
         </div>
       </div>
 
-      <!-- Main Schedule Card -->
-      <div class="lectures-schedule-card">
-        <!-- Date Selector Filter Strip -->
-        <div class="schedule-strip-container">
-          ${filterStripHTML}
+      <!-- Content Area: Conditional Rendering based on viewMode -->
+      ${viewMode === 'timetable' ? `
+        <!-- Weekly Timetable View (Hides list view) -->
+        <div class="timetable-main-card">
+          ${renderFacultyTimetableView(allAssignments, weekOffset)}
         </div>
+      ` : `
+        <!-- Standard List Schedule Card -->
+        <div class="lectures-schedule-card">
+          <!-- Date Selector Filter Strip -->
+          <div class="schedule-strip-container">
+            ${filterStripHTML}
+          </div>
 
-        <!-- Lectures List Container -->
-        <div class="lectures-list schedule-list-area">
-          ${lecturesHTML}
+          <!-- Lectures List Container -->
+          <div class="lectures-list schedule-list-area">
+            ${lecturesHTML}
+          </div>
         </div>
-      </div>
+      `}
     </div>
   `;
 };

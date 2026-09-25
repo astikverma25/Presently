@@ -23,6 +23,8 @@ export class FacultyDashboardApp {
   constructor(container) {
     this.container = container;
     this.currentTab = 'overview'; // 'overview' | 'my-lectures' | 'students' | 'qr-sessions' | 'attendance' | 'reports' | 'settings'
+    this.lectureViewMode = 'list'; // 'list' | 'timetable'
+    this.timetableWeekOffset = 0; // 0 for current week, -1, +1, etc.
     this.profile = null;
     this.kpis = null;
     this.rawAssignments = [];
@@ -232,7 +234,9 @@ export class FacultyDashboardApp {
         this.lectures, 
         this.lectureFilter, 
         this.selectedLectureDate, 
-        this.rawAssignments
+        this.rawAssignments,
+        this.lectureViewMode,
+        this.timetableWeekOffset
       );
     } else if (this.currentTab === 'qr-sessions') {
       if (this.activeLecture?.section && (!this.liveStudents || !this.liveStudents.length)) {
@@ -507,6 +511,41 @@ export class FacultyDashboardApp {
           this.lectureFilter, 
           this.selectedLectureDate
         );
+        await this.render();
+      });
+    }
+
+    // 3.5 Timetable View Switcher & Week Navigation
+    this.container.querySelectorAll('[data-lecture-view]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const mode = btn.getAttribute('data-lecture-view');
+        if (this.lectureViewMode === mode) return;
+        this.lectureViewMode = mode;
+        await this.render();
+      });
+    });
+
+    const timetablePrevWeekBtn = this.container.querySelector('#btn-timetable-prev-week');
+    if (timetablePrevWeekBtn) {
+      timetablePrevWeekBtn.addEventListener('click', async () => {
+        this.timetableWeekOffset -= 1;
+        await this.render();
+      });
+    }
+
+    const timetableNextWeekBtn = this.container.querySelector('#btn-timetable-next-week');
+    if (timetableNextWeekBtn) {
+      timetableNextWeekBtn.addEventListener('click', async () => {
+        this.timetableWeekOffset += 1;
+        await this.render();
+      });
+    }
+
+    const timetableCurrentWeekBtn = this.container.querySelector('#btn-timetable-current-week');
+    if (timetableCurrentWeekBtn) {
+      timetableCurrentWeekBtn.addEventListener('click', async () => {
+        this.timetableWeekOffset = 0;
         await this.render();
       });
     }

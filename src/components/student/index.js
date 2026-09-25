@@ -1,3 +1,4 @@
+import { getLocalDateString } from '../../utils/dateUtils.js';
 import { renderStudentHeader } from './StudentHeader.js';
 import { renderStudentOverview } from './StudentOverview.js';
 import { renderStudentHistory } from './StudentHistory.js';
@@ -22,6 +23,7 @@ export class StudentDashboardApp {
     this.profile = null;
     this.currentLecture = null;
     this.historyList = [];
+    this.historyDateFilter = getLocalDateString();
     this.reportData = null;
     this.sections = [];
     this.qrScanner = null;
@@ -95,7 +97,7 @@ export class StudentDashboardApp {
             ${renderStudentOverview(this.profile, this.currentLecture, this.historyList)}
           </div>
           <div id="tab-pane-history" class="student-tab-pane ${this.currentTab === 'history' ? 'active' : ''}">
-            ${renderStudentHistory(this.historyList)}
+            ${renderStudentHistory(this.historyList, this.historyDateFilter)}
           </div>
           <div id="tab-pane-report" class="student-tab-pane ${this.currentTab === 'report' ? 'active' : ''}">
             ${renderStudentReport(this.reportData, this.selectedSemester)}
@@ -127,6 +129,44 @@ export class StudentDashboardApp {
       document.body.style.overflow = '';
     };
 
+    // Helper: Bind History Tab Events (Date Picker Pill & Toggle All)
+    const bindHistoryEvents = () => {
+      const historyPane = this.container.querySelector('#tab-pane-history');
+      if (!historyPane) return;
+
+      const dateInput = historyPane.querySelector('#input-history-date');
+      const allBtn = historyPane.querySelector('#btn-toggle-all-history');
+      const viewAllBtn = historyPane.querySelector('#btn-history-view-all');
+
+      if (dateInput) {
+        dateInput.addEventListener('change', (e) => {
+          this.historyDateFilter = e.target.value;
+          historyPane.innerHTML = renderStudentHistory(this.historyList, this.historyDateFilter);
+          bindHistoryEvents();
+        });
+      }
+
+      if (allBtn) {
+        allBtn.addEventListener('click', () => {
+          if (!this.historyDateFilter) {
+            this.historyDateFilter = getLocalDateString();
+          } else {
+            this.historyDateFilter = '';
+          }
+          historyPane.innerHTML = renderStudentHistory(this.historyList, this.historyDateFilter);
+          bindHistoryEvents();
+        });
+      }
+
+      if (viewAllBtn) {
+        viewAllBtn.addEventListener('click', () => {
+          this.historyDateFilter = '';
+          historyPane.innerHTML = renderStudentHistory(this.historyList, this.historyDateFilter);
+          bindHistoryEvents();
+        });
+      }
+    };
+
     // 1. Drawer open/close triggers
     const menuToggleBtn = this.container.querySelector('#btn-student-menu-toggle');
     const profilePillBtn = this.container.querySelector('#btn-open-profile-menu');
@@ -136,6 +176,9 @@ export class StudentDashboardApp {
     if (profilePillBtn) profilePillBtn.addEventListener('click', openDrawer);
     if (closeDrawerBtn) closeDrawerBtn.addEventListener('click', closeDrawer);
     if (backdrop) backdrop.addEventListener('click', closeDrawer);
+
+    // Initial binding for History pane
+    bindHistoryEvents();
 
     // 2. Silky Smooth Tab Navigation (Instant Switch without DOM destruction)
     const switchTab = async (newTab) => {
@@ -195,9 +238,12 @@ export class StudentDashboardApp {
         }
       } else if (newTab === 'history') {
         const freshHistory = await StudentService.getAttendanceHistory(this.profile?.id);
-        if (freshHistory && JSON.stringify(freshHistory) !== JSON.stringify(this.historyList)) {
+        if (freshHistory) {
           this.historyList = freshHistory;
-          if (historyPane) historyPane.innerHTML = renderStudentHistory(this.historyList);
+        }
+        if (historyPane) {
+          historyPane.innerHTML = renderStudentHistory(this.historyList, this.historyDateFilter);
+          bindHistoryEvents();
         }
       }
     };
