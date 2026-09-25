@@ -30,17 +30,15 @@ export const renderFacultyReportsView = (reportOptions = {}, currentConfig = {},
     `).join('');
   }
 
-  // 3. Build Subject dropdown options (Only subjects taught by this faculty in selected section)
+  // 3. Build Subject dropdown options (Only specific subjects taught by this faculty in selected section)
   let subjectOptionsHTML = '';
   if (!selectedSectionId) {
     subjectOptionsHTML = '<option value="" disabled selected>Select Section first...</option>';
   } else if (availableSubjects.length === 0) {
     subjectOptionsHTML = '<option value="" disabled selected>No subjects assigned in this section</option>';
   } else {
-    subjectOptionsHTML = `
-      <option value="all" ${selectedSubjectId === 'all' || !selectedSubjectId ? 'selected' : ''}>All Assigned Subjects</option>
-    ` + availableSubjects.map((sub) => `
-      <option value="${sub.subjectId}" ${sub.subjectId === selectedSubjectId ? 'selected' : ''}>
+    subjectOptionsHTML = availableSubjects.map((sub, idx) => `
+      <option value="${sub.subjectId}" ${(sub.subjectId === selectedSubjectId || (!selectedSubjectId && idx === 0)) ? 'selected' : ''}>
         ${sub.displayName}
       </option>
     `).join('');

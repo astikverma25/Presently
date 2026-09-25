@@ -117,10 +117,10 @@ export const renderFacultyQRSession = (activeLecture = {}, studentList = [], ass
             </select>
           </div>
 
-          <!-- 4. Expiry Input -->
+          <!-- 4. Expiry Input (Default: 10s) -->
           <div class="filter-item-inline">
             <span class="filter-inline-label">Expiry</span>
-            <input type="number" class="config-input" id="input-expiry" value="${activeLecture?.expirySeconds || 15}" min="10" max="60" style="width: 58px; min-width: 58px; padding: 5px 8px; font-size: 0.80rem; border-radius: 8px; border: 1px solid var(--dash-border); text-align: center;" ${isSessionActive ? 'disabled style="opacity: 0.75;"' : ''}>
+            <input type="number" class="config-input" id="input-expiry" value="${activeLecture?.expirySeconds || 10}" min="5" max="60" style="width: 58px; min-width: 58px; padding: 5px 8px; font-size: 0.80rem; border-radius: 8px; border: 1px solid var(--dash-border); text-align: center;" ${isSessionActive ? 'disabled style="opacity: 0.75;"' : ''}>
           </div>
 
           ${isSessionActive 
@@ -173,7 +173,7 @@ export const renderFacultyQRSession = (activeLecture = {}, studentList = [], ass
                 <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #64748B; font-size: 0.88rem;">Generating QR...</div>
               `}
 
-              <!-- Minimalist 5s Grace Overlay (Translucent White Layer with Animated Circle) -->
+              <!-- Minimalist 3s Grace Overlay (Translucent White Layer with Animated Circle) -->
               <div class="qr-grace-overlay" id="qr-grace-overlay">
                 <div class="qr-grace-spinner-ring">
                   <svg class="qr-grace-svg-circle" viewBox="0 0 60 60">

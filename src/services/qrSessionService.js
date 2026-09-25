@@ -8,7 +8,7 @@ export class QRSessionService {
   /**
    * 1. Saves dynamic cryptographic token and expiry timestamp to database
    */
-  static async updateSessionToken(sessionId, expirySeconds = 15, tokenSignature = null) {
+  static async updateSessionToken(sessionId, expirySeconds = 10, tokenSignature = null) {
     const timestamp = Date.now();
     const token = tokenSignature || btoa(`${sessionId}:${timestamp}`);
     const expiresAt = new Date(timestamp + expirySeconds * 1000).toISOString();
@@ -37,7 +37,7 @@ export class QRSessionService {
   /**
    * 2. Start or Reactivate a live attendance session in database
    */
-  static async startSession(facultyAssignmentId, expirySeconds = 15) {
+  static async startSession(facultyAssignmentId, expirySeconds = 10) {
     try {
       let assignId = facultyAssignmentId;
       if (!assignId) {

@@ -37,7 +37,7 @@ export class FacultyDashboardApp {
       section: '',
       room: '',
       studentsCount: 0,
-      expirySeconds: 15,
+      expirySeconds: 10,
       id: null
     };
     this.attendanceRecords = [];
@@ -46,7 +46,7 @@ export class FacultyDashboardApp {
     this.currentAttendanceDate = getLocalDateString();
     this.unsavedChangesCount = 0;
     this.qrTimerInterval = null;
-    this.secondsRemaining = 15;
+    this.secondsRemaining = 10;
     this.currentSessionId = null;
     this.activities = [];
     this.isSessionActive = false;
@@ -138,13 +138,13 @@ export class FacultyDashboardApp {
 
   async generateDynamicQR() {
     try {
-      const visibleSec = this.activeLecture?.expirySeconds || 15;
-      const graceSec = 5;
+      const visibleSec = this.activeLecture?.expirySeconds || 10;
+      const graceSec = 3;
       const totalTtlSec = visibleSec + graceSec;
       const sessionId = this.currentSessionId || 'sess-live';
       const token = await generateSessionToken(sessionId);
 
-      // Save token state and total expiration (15s visible + 5s grace window) to database
+      // Save token state and total expiration (10s visible + 3s grace window) to database
       await QRSessionService.updateSessionToken(sessionId, totalTtlSec, token);
 
       // Minimalist payload format: <sessionId>:<token>
@@ -269,8 +269,14 @@ export class FacultyDashboardApp {
         this.reportOptions = await ReportService.getFacultyReportOptions(this.profile?.id);
       }
 
-      if (this.reportOptions.sections.length > 0 && !this.reportConfig.sectionId) {
-        this.reportConfig.sectionId = this.reportOptions.sections[0].sectionId;
+      if (this.reportOptions.sections.length > 0) {
+        if (!this.reportConfig.sectionId) {
+          this.reportConfig.sectionId = this.reportOptions.sections[0].sectionId;
+        }
+        const activeSec = this.reportOptions.sections.find(s => s.sectionId === this.reportConfig.sectionId);
+        if (activeSec?.subjects?.length > 0 && (!this.reportConfig.subjectId || this.reportConfig.subjectId === 'all')) {
+          this.reportConfig.subjectId = activeSec.subjects[0].subjectId;
+        }
       }
 
       mainViewHTML = renderFacultyReportsView(
@@ -357,8 +363,8 @@ export class FacultyDashboardApp {
 
   startQRCountdown() {
     clearInterval(this.qrTimerInterval);
-    const visibleSec = this.activeLecture?.expirySeconds || 15;
-    const graceSec = 5;
+    const visibleSec = this.activeLecture?.expirySeconds || 10;
+    const graceSec = 3;
     this.timerPhase = 'active'; // 'active' | 'grace'
     this.secondsRemaining = visibleSec;
     this.graceRemaining = graceSec;
@@ -390,7 +396,7 @@ export class FacultyDashboardApp {
         }
 
         if (this.secondsRemaining <= 0) {
-          // Enter 5-second Grace Window: Cover QR with sleek loading circle
+          // Enter 3-second Grace Window: Cover QR with sleek loading circle
           this.timerPhase = 'grace';
           this.graceRemaining = graceSec;
           if (graceOverlay) {
@@ -403,7 +409,7 @@ export class FacultyDashboardApp {
             graceCircleBar.style.strokeDashoffset = '0';
           }
           if (refreshLabel) {
-            refreshLabel.textContent = `Rotating attendance key in 5s...`;
+            refreshLabel.textContent = `Rotating attendance key in ${this.graceRemaining}s...`;
           }
         }
       } else if (this.timerPhase === 'grace') {
@@ -590,10 +596,10 @@ export class FacultyDashboardApp {
           section: sName,
           room: 'Room 201',
           studentsCount: 48,
-          expirySeconds: 15
+          expirySeconds: 10
         };
 
-        this.activeLecture = { ...matched, expirySeconds: 15 };
+        this.activeLecture = { ...matched, expirySeconds: this.activeLecture?.expirySeconds || 10 };
         this.currentAttendanceDate = matched.lecDate || getLocalDateString();
         this.currentAttendanceSection = matched.section;
         this.currentAttendanceLectureId = matched.id;
@@ -828,7 +834,7 @@ export class FacultyDashboardApp {
     if (inputExpiry) {
       inputExpiry.addEventListener('change', (e) => {
         if (this.activeLecture) {
-          this.activeLecture.expirySeconds = parseInt(e.target.value, 10) || 15;
+          this.activeLecture.expirySeconds = parseInt(e.target.value, 10) || 10;
         }
       });
     }
@@ -983,7 +989,8 @@ export class FacultyDashboardApp {
       if (selectSection) {
         selectSection.addEventListener('change', async (e) => {
           this.reportConfig.sectionId = e.target.value;
-          this.reportConfig.subjectId = 'all';
+          const activeSec = this.reportOptions.sections.find(s => s.sectionId === this.reportConfig.sectionId);
+          this.reportConfig.subjectId = activeSec?.subjects?.[0]?.subjectId || '';
           this.reportMatrixData = null;
           await this.render();
         });

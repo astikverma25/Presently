@@ -145,10 +145,10 @@ export async function createDynamicQRPayload(sessionDetails, expirySec = 15) {
 /**
  * Verifies scanned student payload against time-window & cryptographic signature
  * @param {Object} payload Scanned QR payload
- * @param {number} expirySec Validity window in seconds (e.g. 15s)
- * @param {number} graceSec Network transit grace window in seconds (e.g. 5s)
+ * @param {number} expirySec Validity window in seconds (e.g. 10s)
+ * @param {number} graceSec Network transit grace window in seconds (e.g. 3s)
  */
-export async function verifyTotpPayload(payload, expirySec = 15, graceSec = 5) {
+export async function verifyTotpPayload(payload, expirySec = 10, graceSec = 3) {
   if (!payload || !payload.sessionId || !payload.ts || !payload.sig) {
     return {
       isValid: false,
