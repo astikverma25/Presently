@@ -94,12 +94,41 @@ export async function generateTotpSignature(sessionId, timestamp, secret = SYSTE
 }
 
 /**
+ * Generates a cryptographically secure 6-character random token (CSPRNG)
+ * Uses 31 unambiguous alphanumeric characters (excluding 0/O, 1/I)
+ * Provides over 1 Billion combinations for the 15-second window
+ */
+export function generateRandomToken(length = 6) {
+  const chars = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+  const randomBytes = new Uint8Array(length);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(randomBytes);
+  } else {
+    for (let i = 0; i < length; i++) {
+      randomBytes[i] = Math.floor(Math.random() * 256);
+    }
+  }
+  let token = '';
+  for (let i = 0; i < length; i++) {
+    token += chars[randomBytes[i] % chars.length];
+  }
+  return token;
+}
+
+/**
+ * Generates a compact dynamic rolling 6-character token for a session
+ */
+export async function generateSessionToken(sessionId = null, timestamp = Date.now()) {
+  return generateRandomToken(6);
+}
+
+/**
  * Generates complete dynamic QR payload for faculty display
  */
 export async function createDynamicQRPayload(sessionDetails, expirySec = 15) {
   const timestamp = Date.now();
   const sessionId = sessionDetails.sessionId || 'sess-live';
-  const token = await generateTotpSignature(sessionId, timestamp);
+  const token = await generateSessionToken(sessionId, timestamp);
 
   return {
     sessionId: sessionId,

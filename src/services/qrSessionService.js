@@ -39,7 +39,6 @@ export class QRSessionService {
    */
   static async startSession(facultyAssignmentId, expirySeconds = 15) {
     try {
-      // Find assignment ID if not passed
       let assignId = facultyAssignmentId;
       if (!assignId) {
         const { data: firstAssign } = await supabase
@@ -51,13 +50,22 @@ export class QRSessionService {
       }
 
       if (assignId) {
-        // Mark assignment status as ongoing
+        // 1. High-Speed Server RPC (Guarantees valid UUID and avoids client permission issues)
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('start_or_reactivate_session', {
+          p_faculty_assignment_id: assignId,
+          p_expiry_sec: expirySeconds
+        });
+
+        if (!rpcErr && rpcData?.success && rpcData?.id) {
+          return rpcData;
+        }
+
+        // 2. Direct table fallback
         await supabase
           .from('faculty_assignment')
           .update({ status: 'ongoing' })
           .eq('id', assignId);
 
-        // Check if a session already exists for this assignment (re-start scenario: reuse & reactivate existing session)
         const { data: existingSessions } = await supabase
           .from('attendance_sessions')
           .select('*')
@@ -67,7 +75,7 @@ export class QRSessionService {
 
         if (existingSessions && existingSessions.length > 0) {
           const existing = existingSessions[0];
-          const { data: reactivatedSession, error: reactivateErr } = await supabase
+          const { data: reactivatedSession } = await supabase
             .from('attendance_sessions')
             .update({
               status: 'active',
@@ -78,13 +86,12 @@ export class QRSessionService {
             .select()
             .single();
 
-          if (!reactivateErr && reactivatedSession) {
+          if (reactivatedSession) {
             return reactivatedSession;
           }
         }
 
-        // Otherwise insert new session row
-        const { data: newSession, error } = await supabase
+        const { data: newSession } = await supabase
           .from('attendance_sessions')
           .insert([
             {
@@ -97,7 +104,7 @@ export class QRSessionService {
           .select()
           .single();
 
-        if (!error && newSession) {
+        if (newSession) {
           return newSession;
         }
       }
@@ -105,11 +112,7 @@ export class QRSessionService {
       console.warn('Could not start/reactivate session:', err.message);
     }
 
-    return {
-      id: 'sess-' + Date.now(),
-      qr_expiry_sec: expirySeconds,
-      status: 'active'
-    };
+    return null;
   }
 
   /**
@@ -235,6 +238,7 @@ export class QRSessionService {
           id: s.id,
           name: s.name,
           rollNumber: s.roll_no,
+          photoUrl: s.photo_url || s.photoUrl || '',
           status: isMarked ? 'marked' : 'unmarked',
           initials: initials,
           colorClass: colorClasses[idx % colorClasses.length],

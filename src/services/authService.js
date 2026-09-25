@@ -59,11 +59,16 @@ export class AuthService {
           }
         }
 
-        const isLocalDev = typeof import.meta !== 'undefined' && 
-          import.meta.env?.DEV && 
-          (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+        const isLocalDev = typeof import.meta !== 'undefined' && (
+          import.meta.env?.DEV || 
+          window.location.hostname === 'localhost' || 
+          window.location.hostname === '127.0.0.1' ||
+          window.location.hostname.includes('trycloudflare.com') ||
+          window.location.hostname.includes('ngrok') ||
+          window.location.hostname.includes('loca.lt')
+        );
 
-        // On local dev server only (completely stripped from production builds)
+        // On local dev server / preview tunnel
         if (isLocalDev) {
           const sessionPayload = {
             user: {
@@ -401,12 +406,17 @@ export class AuthService {
     const session = AuthService.getCurrentSession();
     if (!session) return null;
 
-    const isLocalDev = typeof import.meta !== 'undefined' && 
-      import.meta.env?.DEV && 
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const isLocalDev = typeof import.meta !== 'undefined' && (
+      import.meta.env?.DEV || 
+      window.location.hostname === 'localhost' || 
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname.includes('trycloudflare.com') ||
+      window.location.hostname.includes('ngrok') ||
+      window.location.hostname.includes('loca.lt')
+    );
 
     if (session.role === 'student' && session.user?.id) {
-      // Allow direct session validation during local development
+      // Allow direct session validation during local development / tunnel preview
       if (isLocalDev && session.isLocalDev) {
         return session;
       }

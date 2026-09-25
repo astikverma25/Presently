@@ -21,6 +21,32 @@ export const renderStudentScannerModal = () => `
       <div class="camera-viewfinder">
         <div class="laser-scanner-line"></div>
       </div>
+
+      <!-- Floating Zoom Control Line Bar (Zoom in / out for projector distance) -->
+      <div class="scanner-zoom-overlay">
+        <div class="scanner-zoom-control-bar">
+          <button type="button" class="btn-zoom-step" id="btn-zoom-out" title="Zoom Out ( - )">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+
+          <div class="zoom-slider-container">
+            <input type="range" id="scanner-zoom-slider" class="scanner-zoom-slider-line" min="1.0" max="4.0" step="0.1" value="1.0" title="Adjust Camera Zoom">
+            <span class="zoom-badge-indicator" id="zoom-badge-text">1.0x</span>
+          </div>
+
+          <button type="button" class="btn-zoom-step" id="btn-zoom-in" title="Zoom In ( + )">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+        </div>
+
+        <!-- Quick Zoom Presets -->
+        <div class="zoom-presets-row">
+          <button type="button" class="btn-zoom-preset active" data-zoom="1.0">1x</button>
+          <button type="button" class="btn-zoom-preset" data-zoom="1.5">1.5x</button>
+          <button type="button" class="btn-zoom-preset" data-zoom="2.0">2x</button>
+          <button type="button" class="btn-zoom-preset" data-zoom="3.0">3x</button>
+        </div>
+      </div>
     </div>
 
     <!-- Instructions & Controls -->

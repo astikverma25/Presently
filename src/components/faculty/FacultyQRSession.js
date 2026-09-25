@@ -141,15 +141,27 @@ export const renderFacultyQRSession = (activeLecture = {}, studentList = [], ass
       </div>
 
       <!-- 2-Column Live Session Layout -->
-      <div class="qr-live-workspace-grid">
+      <div class="qr-live-workspace-grid" id="qr-live-workspace-grid">
         <!-- Left: QR Display Card -->
         <div class="qr-live-display-card">
-          <div class="qr-live-card-header">
-            <h3>${isConfigured ? `${activeLecture.className} - Sec ${activeLecture.section}` : 'Launch Live QR Attendance'}</h3>
-            ${isSessionActive 
-              ? '<span class="badge-live-pulse">Live</span>' 
-              : (isConfigured ? '<span class="badge-standby">Ready to Launch</span>' : '<span class="badge-standby" style="opacity:0.6;">Awaiting Selection</span>')
-            }
+          <div class="qr-live-card-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <h3 style="font-size: 1.05rem; font-weight: 700; color: #0F172A; margin: 0;">${isConfigured ? `${activeLecture.className} – Sec ${activeLecture.section}` : 'Launch Live QR Attendance'}</h3>
+              ${isSessionActive 
+                ? '<span class="badge-live-pulse" style="font-size: 0.72rem; padding: 2px 10px;">Live</span>' 
+                : (isConfigured ? '<span class="badge-standby" style="font-size: 0.72rem; padding: 2px 10px;">Ready to Launch</span>' : '<span class="badge-standby" style="font-size: 0.72rem; padding: 2px 10px; opacity: 0.6;">Awaiting Selection</span>')
+              }
+            </div>
+
+            <button type="button" class="btn-fullscreen-toggle" id="btn-toggle-qr-fullscreen" title="Full Screen View (Press F)" aria-label="Toggle Full Screen">
+              <svg class="fs-icon-enter" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+              </svg>
+              <svg class="fs-icon-exit" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"></path>
+              </svg>
+              <span class="fs-btn-label">Full Screen</span>
+            </button>
           </div>
 
           <!-- Projector QR Frame -->
@@ -160,6 +172,19 @@ export const renderFacultyQRSession = (activeLecture = {}, studentList = [], ass
               ` : `
                 <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #64748B; font-size: 0.88rem;">Generating QR...</div>
               `}
+
+              <!-- Minimalist 5s Grace Overlay (Translucent White Layer with Animated Circle) -->
+              <div class="qr-grace-overlay" id="qr-grace-overlay">
+                <div class="qr-grace-spinner-ring">
+                  <svg class="qr-grace-svg-circle" viewBox="0 0 60 60">
+                    <circle class="qr-grace-circle-bg" cx="30" cy="30" r="24"></circle>
+                    <circle class="qr-grace-circle-progress" id="qr-grace-circle-bar" cx="30" cy="30" r="24"></circle>
+                  </svg>
+                  <span class="qr-grace-countdown-num" id="qr-grace-countdown-num">5</span>
+                </div>
+                <div class="qr-grace-title">Rotating Key</div>
+                <div class="qr-grace-subtitle">Processing in-flight scans...</div>
+              </div>
             </div>
 
             <!-- Progress Countdown Bar -->
@@ -170,7 +195,7 @@ export const renderFacultyQRSession = (activeLecture = {}, studentList = [], ass
               <span class="qr-refresh-text" id="qr-refresh-label">Refreshes in ${activeLecture?.expirySeconds || 15}s</span>
             </div>
 
-            <p class="qr-meta-text">${activeLecture?.room || 'Room 201'} • ${activeLecture?.time || ''} • Session Active</p>
+            <p class="qr-meta-text" style="font-size: 0.78rem; color: #64748B; margin-top: 4px;">${activeLecture?.room || 'Room 201'} • ${activeLecture?.time || ''} • Session Active</p>
             <button type="button" class="btn-end-qr-session" id="btn-end-live-session-card">End & Submit Session</button>
           ` : `
             <div class="qr-standby-frame">
@@ -186,15 +211,11 @@ export const renderFacultyQRSession = (activeLecture = {}, studentList = [], ass
                   <circle cx="7" cy="17.5" r="1.5" fill="#4338CA"></circle>
                 </svg>
               </div>
-              <h4>${isConfigured ? 'Session Ready' : 'Session Inactive'}</h4>
-              <p>${isConfigured ? `Ready to launch rolling anti-proxy QR code for ${activeLecture.className} (Sec ${activeLecture.section}).` : 'Please select Date, Section, and Lecture above to launch the live QR session.'}</p>
+              <h4 style="font-size: 0.95rem; font-weight: 700; color: #0F172A; margin: 0 0 4px 0;">${isConfigured ? 'Session Ready' : 'Session Inactive'}</h4>
+              <p style="font-size: 0.78rem; color: #64748B; line-height: 1.4; margin: 0;">${isConfigured ? `Ready to launch rolling anti-proxy QR code for ${activeLecture.className} (Sec ${activeLecture.section}).` : 'Please select Date, Section, and Lecture above to launch the live QR session.'}</p>
             </div>
 
-            <p class="qr-meta-text">${isConfigured ? `${activeLecture.room || 'Room 201'} • ${activeLecture.time || ''} • Standby Mode` : 'Standby Mode'}</p>
-            <button type="button" class="btn-start-qr-stream" id="btn-start-live-session-card" style="padding: 10px 24px;" ${!isConfigured ? 'disabled style="opacity: 0.6; cursor: not-allowed;"' : ''}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-              Launch Live Attendance
-            </button>
+            <p class="qr-meta-text" style="font-size: 0.78rem; color: #64748B; margin-top: 4px;">${isConfigured ? `${activeLecture.room || 'Room 201'} • ${activeLecture.time || ''} • Standby Mode` : 'Standby Mode'}</p>
           `}
         </div>
 

@@ -1,6 +1,6 @@
 import { QRGenerator } from '../../utils/qrGenerator.js';
 import { getLocalDateString } from '../../utils/dateUtils.js';
-import { createDynamicQRPayload, validateStrongPassword } from '../../utils/totpCrypto.js';
+import { generateSessionToken, createDynamicQRPayload, validateStrongPassword } from '../../utils/totpCrypto.js';
 import { renderFacultySidebar } from './FacultySidebar.js';
 import { renderFacultyTopbar } from './FacultyTopbar.js';
 import { renderFacultyOverview } from './FacultyOverview.js';
@@ -8,10 +8,12 @@ import { renderFacultyLecturesView } from './FacultyLecturesView.js';
 import { renderFacultyQRSession } from './FacultyQRSession.js';
 import { renderStudentStreamItem } from './StudentStreamItem.js';
 import { renderFacultyAttendanceRecord } from './FacultyAttendanceRecord.js';
+import { renderFacultyReportsView } from './FacultyReportsView.js';
 import { renderFacultySettingsView } from './FacultySettingsView.js';
 import { FacultyService } from '../../services/facultyService.js';
 import { QRSessionService } from '../../services/qrSessionService.js';
 import { AttendanceService } from '../../services/attendanceService.js';
+import { ReportService } from '../../services/reportService.js';
 
 /**
  * Master Faculty Dashboard Module Coordinator
@@ -48,6 +50,10 @@ export class FacultyDashboardApp {
     this.isSessionActive = false;
     this.currentQrDataUrl = '';
     this.liveStudents = [];
+    this.reportOptions = { sections: [] };
+    this.reportConfig = { sectionId: '', subjectId: 'all', startDate: '', endDate: '' };
+    this.reportMatrixData = null;
+    this.isReportLoading = false;
   }
 
   async init() {
@@ -130,24 +136,28 @@ export class FacultyDashboardApp {
 
   async generateDynamicQR() {
     try {
-      const expirySec = this.activeLecture?.expirySeconds || 15;
-      const payloadObj = await createDynamicQRPayload({
-        sessionId: this.currentSessionId || 'sess-live',
-        assignmentId: this.activeLecture?.id || null,
-        lecId: this.activeLecture?.lecId || null,
-        className: this.activeLecture?.className,
-        section: this.activeLecture?.section
-      }, expirySec);
+      const visibleSec = this.activeLecture?.expirySeconds || 15;
+      const graceSec = 5;
+      const totalTtlSec = visibleSec + graceSec;
+      const sessionId = this.currentSessionId || 'sess-live';
+      const token = await generateSessionToken(sessionId);
 
-      // Save token state to database session record
-      await QRSessionService.updateSessionToken(this.currentSessionId, expirySec, payloadObj.sig);
+      // Save token state and total expiration (15s visible + 5s grace window) to database
+      await QRSessionService.updateSessionToken(sessionId, totalTtlSec, token);
 
-      const payloadString = JSON.stringify(payloadObj);
-      this.currentQrDataUrl = await QRGenerator.generateDataURL(payloadString, 280);
+      // Minimalist payload format: <sessionId>:<token>
+      const payloadString = `${sessionId}:${token}`;
+      this.currentQrDataUrl = await QRGenerator.generateDataURL(payloadString, 1024);
 
       const qrImg = this.container.querySelector('#qr-img-canvas');
       if (qrImg) {
         qrImg.src = this.currentQrDataUrl;
+      }
+
+      // Ensure grace overlay is hidden when new QR is ready
+      const graceOverlay = this.container.querySelector('#qr-grace-overlay');
+      if (graceOverlay) {
+        graceOverlay.classList.remove('active');
       }
     } catch (err) {
       console.warn('QR Code generation error:', err);
@@ -242,7 +252,30 @@ export class FacultyDashboardApp {
         this.currentQrDataUrl,
         this.currentAttendanceDate
       );
-    } else if (this.currentTab === 'attendance' || this.currentTab === 'students' || this.currentTab === 'reports') {
+    } else if (this.currentTab === 'reports') {
+      if (!this.reportConfig.startDate || !this.reportConfig.endDate) {
+        const todayStr = getLocalDateString();
+        const d = new Date(todayStr);
+        d.setDate(1); // 1st of month
+        this.reportConfig.startDate = d.toISOString().split('T')[0];
+        this.reportConfig.endDate = todayStr;
+      }
+
+      if (!this.reportOptions.sections || this.reportOptions.sections.length === 0) {
+        this.reportOptions = await ReportService.getFacultyReportOptions(this.profile?.id);
+      }
+
+      if (this.reportOptions.sections.length > 0 && !this.reportConfig.sectionId) {
+        this.reportConfig.sectionId = this.reportOptions.sections[0].sectionId;
+      }
+
+      mainViewHTML = renderFacultyReportsView(
+        this.reportOptions,
+        this.reportConfig,
+        this.reportMatrixData,
+        this.isReportLoading
+      );
+    } else if (this.currentTab === 'attendance' || this.currentTab === 'students') {
       mainViewHTML = renderFacultyAttendanceRecord(
         this.attendanceRecords,
         {
@@ -320,36 +353,82 @@ export class FacultyDashboardApp {
 
   startQRCountdown() {
     clearInterval(this.qrTimerInterval);
-    const totalSec = this.activeLecture.expirySeconds || 15;
-    this.secondsRemaining = totalSec;
+    const visibleSec = this.activeLecture?.expirySeconds || 15;
+    const graceSec = 5;
+    this.timerPhase = 'active'; // 'active' | 'grace'
+    this.secondsRemaining = visibleSec;
+    this.graceRemaining = graceSec;
 
     const progressBar = this.container.querySelector('#qr-progress-bar');
     const refreshLabel = this.container.querySelector('#qr-refresh-label');
+    const graceOverlay = this.container.querySelector('#qr-grace-overlay');
+    const graceNum = this.container.querySelector('#qr-grace-countdown-num');
+    const graceCircleBar = this.container.querySelector('#qr-grace-circle-bar');
+
+    if (graceOverlay) {
+      graceOverlay.classList.remove('active');
+    }
 
     this.qrTimerInterval = setInterval(async () => {
-      this.secondsRemaining--;
-      if (progressBar) {
-        const pct = Math.max(0, (this.secondsRemaining / totalSec) * 100);
-        progressBar.style.width = `${pct}%`;
-      }
-      if (refreshLabel) {
-        refreshLabel.textContent = `Refreshes in ${this.secondsRemaining}s`;
-      }
-
-      // Poll check-ins every 2 seconds for ultra-responsive live roster updates
-      if (this.secondsRemaining % 2 === 0) {
-        await this.syncLiveStream();
-      }
-
-      if (this.secondsRemaining <= 0) {
-        this.secondsRemaining = totalSec;
-        const qrBox = this.container.querySelector('#dynamic-qr-box');
-        if (qrBox) {
-          qrBox.style.opacity = '0.5';
-          await this.generateDynamicQR();
-          setTimeout(() => { if (qrBox) qrBox.style.opacity = '1'; }, 200);
+      if (this.timerPhase === 'active') {
+        this.secondsRemaining--;
+        if (progressBar) {
+          const pct = Math.max(0, (this.secondsRemaining / visibleSec) * 100);
+          progressBar.style.width = `${pct}%`;
         }
-        await this.syncLiveStream();
+        if (refreshLabel) {
+          refreshLabel.textContent = `Refreshes in ${this.secondsRemaining}s`;
+        }
+
+        // Live check-in polling
+        if (this.secondsRemaining % 2 === 0) {
+          await this.syncLiveStream();
+        }
+
+        if (this.secondsRemaining <= 0) {
+          // Enter 5-second Grace Window: Cover QR with sleek loading circle
+          this.timerPhase = 'grace';
+          this.graceRemaining = graceSec;
+          if (graceOverlay) {
+            graceOverlay.classList.add('active');
+          }
+          if (graceNum) {
+            graceNum.textContent = `${this.graceRemaining}`;
+          }
+          if (graceCircleBar) {
+            graceCircleBar.style.strokeDashoffset = '0';
+          }
+          if (refreshLabel) {
+            refreshLabel.textContent = `Rotating attendance key in 5s...`;
+          }
+        }
+      } else if (this.timerPhase === 'grace') {
+        this.graceRemaining--;
+        if (graceNum) {
+          graceNum.textContent = `${Math.max(1, this.graceRemaining)}`;
+        }
+        if (graceCircleBar) {
+          const circumference = 150.8;
+          const offset = circumference * (1 - (this.graceRemaining / graceSec));
+          graceCircleBar.style.strokeDashoffset = `${offset}`;
+        }
+        if (refreshLabel) {
+          refreshLabel.textContent = `Rotating attendance key in ${this.graceRemaining}s...`;
+        }
+
+        if (this.graceRemaining <= 0) {
+          // Grace period finished -> Rotate to brand new QR code
+          this.timerPhase = 'active';
+          this.secondsRemaining = visibleSec;
+          await this.generateDynamicQR();
+          if (progressBar) {
+            progressBar.style.width = `100%`;
+          }
+          if (refreshLabel) {
+            refreshLabel.textContent = `Refreshes in ${this.secondsRemaining}s`;
+          }
+          await this.syncLiveStream();
+        }
       }
     }, 1000);
   }
@@ -521,6 +600,71 @@ export class FacultyDashboardApp {
       });
     }
 
+    // 5.5. Full Screen Projector Mode Controls (YouTube-style)
+    const fsToggleBtn = this.container.querySelector('#btn-toggle-qr-fullscreen');
+    const qrWorkspaceGrid = this.container.querySelector('#qr-live-workspace-grid');
+
+    const updateFullscreenState = () => {
+      const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement || qrWorkspaceGrid?.classList.contains('is-fullscreen-fallback'));
+      const enterIcon = this.container.querySelector('.fs-icon-enter');
+      const exitIcon = this.container.querySelector('.fs-icon-exit');
+      const btnLabel = this.container.querySelector('.fs-btn-label');
+
+      if (enterIcon) enterIcon.style.display = isFs ? 'none' : 'inline-block';
+      if (exitIcon) exitIcon.style.display = isFs ? 'inline-block' : 'none';
+      if (btnLabel) btnLabel.textContent = isFs ? 'Exit Full Screen' : 'Full Screen';
+      if (fsToggleBtn) fsToggleBtn.title = isFs ? 'Exit Fullscreen (Esc or F)' : 'Full Screen Projector View (F)';
+    };
+
+    const toggleFullscreen = async () => {
+      if (!qrWorkspaceGrid) return;
+
+      const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+
+      if (!isFs) {
+        try {
+          if (qrWorkspaceGrid.requestFullscreen) {
+            await qrWorkspaceGrid.requestFullscreen();
+          } else if (qrWorkspaceGrid.webkitRequestFullscreen) {
+            await qrWorkspaceGrid.webkitRequestFullscreen();
+          } else if (qrWorkspaceGrid.mozRequestFullScreen) {
+            await qrWorkspaceGrid.mozRequestFullScreen();
+          } else if (qrWorkspaceGrid.msRequestFullscreen) {
+            await qrWorkspaceGrid.msRequestFullscreen();
+          } else {
+            qrWorkspaceGrid.classList.add('is-fullscreen-fallback');
+          }
+        } catch (err) {
+          console.warn('Fullscreen request failed, using CSS fallback:', err);
+          qrWorkspaceGrid.classList.toggle('is-fullscreen-fallback');
+        }
+      } else {
+        try {
+          if (document.exitFullscreen) {
+            await document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            await document.webkitExitFullscreen();
+          } else if (document.mozCancelFullScreen) {
+            await document.mozCancelFullScreen();
+          } else if (document.msExitFullscreen) {
+            await document.msExitFullscreen();
+          }
+        } catch (err) {
+          console.warn('Exit fullscreen failed:', err);
+        }
+        qrWorkspaceGrid.classList.remove('is-fullscreen-fallback');
+      }
+
+      updateFullscreenState();
+    };
+
+    if (fsToggleBtn) {
+      fsToggleBtn.addEventListener('click', toggleFullscreen);
+    }
+
+    document.addEventListener('fullscreenchange', updateFullscreenState);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenState);
+
     // 6. QR Session: Configuration selectors (Date -> Section -> Lecture -> Expiry)
     const inputQrDate = this.container.querySelector('#input-qr-date');
     const selectQrSection = this.container.querySelector('#select-qr-section');
@@ -651,7 +795,7 @@ export class FacultyDashboardApp {
     }
 
     // 6. Attendance Record View Events
-    if (this.currentTab === 'attendance' || this.currentTab === 'students' || this.currentTab === 'reports') {
+    if (this.currentTab === 'attendance' || this.currentTab === 'students') {
       // Toggle Status Pills (Present <-> Absent)
       this.container.querySelectorAll('.btn-status-pill').forEach(pill => {
         pill.addEventListener('click', () => {
@@ -782,6 +926,100 @@ export class FacultyDashboardApp {
           }
           await this.refreshAttendance();
           await this.render();
+        });
+      }
+    }
+
+    // 7. Reports Tab Handlers (Section, Subject, Date Range, Matrix Preview, CSV / Excel Download)
+    if (this.currentTab === 'reports') {
+      const selectSection = this.container.querySelector('#report-select-section');
+      const selectSubject = this.container.querySelector('#report-select-subject');
+      const inputStartDate = this.container.querySelector('#report-date-start');
+      const inputEndDate = this.container.querySelector('#report-date-end');
+      const btnGenerate = this.container.querySelector('#btn-generate-report');
+      const btnDownloadExcel = this.container.querySelector('#btn-download-excel');
+      const btnDownloadCsv = this.container.querySelector('#btn-download-csv');
+      const presetButtons = this.container.querySelectorAll('.btn-preset-pill');
+
+      if (selectSection) {
+        selectSection.addEventListener('change', async (e) => {
+          this.reportConfig.sectionId = e.target.value;
+          this.reportConfig.subjectId = 'all';
+          this.reportMatrixData = null;
+          await this.render();
+        });
+      }
+
+      if (selectSubject) {
+        selectSubject.addEventListener('change', (e) => {
+          this.reportConfig.subjectId = e.target.value;
+        });
+      }
+
+      if (inputStartDate) {
+        inputStartDate.addEventListener('change', (e) => {
+          this.reportConfig.startDate = e.target.value;
+        });
+      }
+
+      if (inputEndDate) {
+        inputEndDate.addEventListener('change', (e) => {
+          this.reportConfig.endDate = e.target.value;
+        });
+      }
+
+      presetButtons.forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const preset = btn.getAttribute('data-preset');
+          const todayStr = getLocalDateString();
+          const today = new Date(todayStr);
+
+          if (preset === 'this_month') {
+            const d = new Date(today);
+            d.setDate(1);
+            this.reportConfig.startDate = d.toISOString().split('T')[0];
+            this.reportConfig.endDate = todayStr;
+          } else if (preset === 'last_30_days') {
+            const d = new Date(today);
+            d.setDate(d.getDate() - 30);
+            this.reportConfig.startDate = d.toISOString().split('T')[0];
+            this.reportConfig.endDate = todayStr;
+          } else if (preset === 'this_week') {
+            const d = new Date(today);
+            const day = d.getDay();
+            const diff = (day === 0 ? -6 : 1) - day;
+            d.setDate(d.getDate() + diff);
+            this.reportConfig.startDate = d.toISOString().split('T')[0];
+            this.reportConfig.endDate = todayStr;
+          }
+
+          if (this.reportConfig.sectionId) {
+            await this.generateReportPreview();
+          } else {
+            await this.render();
+          }
+        });
+      });
+
+      if (btnGenerate) {
+        btnGenerate.addEventListener('click', async () => {
+          await this.generateReportPreview();
+        });
+      }
+
+      if (btnDownloadExcel) {
+        btnDownloadExcel.addEventListener('click', () => {
+          if (this.reportMatrixData) {
+            ReportService.exportMatrixToExcel(this.reportMatrixData);
+          }
+        });
+      }
+
+      if (btnDownloadCsv) {
+        btnDownloadCsv.addEventListener('click', () => {
+          if (this.reportMatrixData) {
+            ReportService.exportMatrixToCSV(this.reportMatrixData);
+          }
         });
       }
     }
@@ -960,6 +1198,40 @@ export class FacultyDashboardApp {
           }
         });
       }
+    }
+  }
+
+  /**
+   * Generates Multi-Date Attendance Matrix for Reports
+   */
+  async generateReportPreview() {
+    if (!this.reportConfig.sectionId) {
+      alert('Please select a Class / Section first.');
+      return;
+    }
+    if (!this.reportConfig.startDate || !this.reportConfig.endDate) {
+      alert('Please select both Start Date and End Date.');
+      return;
+    }
+    if (this.reportConfig.startDate > this.reportConfig.endDate) {
+      alert('Start Date cannot be after End Date.');
+      return;
+    }
+
+    this.isReportLoading = true;
+    await this.render();
+
+    try {
+      this.reportMatrixData = await ReportService.generateAttendanceMatrix(
+        this.profile?.id,
+        this.reportConfig
+      );
+    } catch (err) {
+      alert(`Failed to generate attendance report: ${err.message || 'Database error'}`);
+      this.reportMatrixData = null;
+    } finally {
+      this.isReportLoading = false;
+      await this.render();
     }
   }
 }

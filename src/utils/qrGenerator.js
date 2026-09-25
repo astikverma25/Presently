@@ -8,14 +8,14 @@ export class QRGenerator {
   /**
    * Generates a real ISO-standard scannable Data URL for the given text payload
    */
-  static async generateDataURL(text, size = 280) {
+  static async generateDataURL(text, size = 1024) {
     try {
       return await QRCode.toDataURL(text, {
         width: size,
         margin: 2,
         errorCorrectionLevel: 'M',
         color: {
-          dark: '#1E1B4B',
+          dark: '#000000',
           light: '#FFFFFF'
         }
       });
@@ -28,7 +28,7 @@ export class QRGenerator {
   /**
    * Generates real SVG markup string
    */
-  static async generateSVG(text, size = 280) {
+  static async generateSVG(text, size = 1024) {
     try {
       return await QRCode.toString(text, {
         type: 'svg',
@@ -36,7 +36,7 @@ export class QRGenerator {
         margin: 2,
         errorCorrectionLevel: 'M',
         color: {
-          dark: '#1E1B4B',
+          dark: '#000000',
           light: '#FFFFFF'
         }
       });

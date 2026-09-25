@@ -77,6 +77,7 @@ export class AttendanceService {
           studentId: s.id,
           rollNo: s.roll_no || `2A-0${idx + 40}`,
           studentName: s.name,
+          photoUrl: s.photo_url || s.photoUrl || '',
           markedAt: isPresent ? markedTime : '—',
           status: isPresent ? 'Present' : 'Absent',
           verificationMethod: existingRecord?.verification_method || 'qr_scan',
@@ -169,7 +170,7 @@ export class AttendanceService {
   static exportRecords(records, filename = 'attendance_report.csv') {
     const formatted = (records || []).map(r => ({
       'S.No': r.sNo,
-      'Roll No': r.rollNo,
+      'Roll No': `="${r.rollNo}"`,
       'Student Name': r.studentName,
       'Marked At': r.markedAt,
       'Status': r.status

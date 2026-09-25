@@ -1,12 +1,10 @@
+import { renderStudentThumbnail } from '../../utils/avatarUtils.js';
+
 /**
  * Student Side Navigation Drawer Component (Hamburger Menu)
  * Slide-out navigation with student profile summary and quick actions
  */
 export const renderStudentDrawer = (profile, currentTab = 'overview', historyCount = 0) => {
-  const initials = profile?.name 
-    ? profile.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
-    : 'ST';
-
   return `
     <!-- Drawer Backdrop Overlay -->
     <div class="student-drawer-backdrop" id="student-drawer-backdrop"></div>
@@ -16,9 +14,7 @@ export const renderStudentDrawer = (profile, currentTab = 'overview', historyCou
       <!-- Drawer Header / Profile Card -->
       <div class="drawer-header">
         <div class="drawer-profile-row">
-          <div class="drawer-avatar">
-            ${initials}
-          </div>
+          ${renderStudentThumbnail(profile || {}, { size: 46 })}
           <div class="drawer-profile-info">
             <h3 class="drawer-name">${profile?.name || 'Student'}</h3>
             <p class="drawer-roll">Roll: <strong>${profile?.rollNumber || profile?.rollNo || '—'}</strong></p>

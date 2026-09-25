@@ -1,11 +1,9 @@
+import { renderStudentThumbnail } from '../../utils/avatarUtils.js';
+
 /**
  * Student Profile Edit & Password Update Modal Component
  */
 export const renderStudentProfileModal = (profile) => {
-  const initials = profile?.name 
-    ? profile.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
-    : 'ST';
-
   return `
     <div id="student-profile-modal" class="student-profile-modal-overlay">
       <div class="student-profile-card-modal">
@@ -31,16 +29,79 @@ export const renderStudentProfileModal = (profile) => {
           </button>
         </div>
 
-        <!-- Student Summary Card (Read-only Academic info) -->
+        <!-- Student Summary Card (Read-only Academic info + Photo Capture) -->
         <div class="profile-summary-box">
-          <div class="profile-summary-avatar">${initials}</div>
-          <div class="profile-summary-meta">
-            <h4 class="profile-summary-name">${profile?.name || 'Student User'}</h4>
+          <div class="profile-avatar-action-wrap" style="position: relative; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;" title="Change photo">
+            <div id="profile-modal-avatar-preview">
+              ${renderStudentThumbnail(profile || {}, { size: 58 })}
+            </div>
+            <button type="button" id="btn-trigger-photo-capture" class="btn-avatar-camera-pill" title="Take or upload student photo" style="position: absolute; bottom: -3px; right: -3px; background: #4338CA; color: #FFFFFF; border: 2px solid #FFFFFF; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+            </button>
+            <input type="file" id="input-student-photo-file" accept="image/*" style="display: none;" />
+          </div>
+
+          <div class="profile-summary-meta" style="flex: 1;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <h4 class="profile-summary-name">${profile?.name || 'Student User'}</h4>
+              <button type="button" id="btn-quick-take-photo" style="font-size: 0.74rem; font-weight: 700; color: #4338CA; background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 6px; padding: 4px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                📸 Take Photo
+              </button>
+            </div>
             <div class="profile-summary-tags">
               <span class="profile-meta-tag">Roll: <strong>${profile?.rollNumber || profile?.roll_no || '—'}</strong></span>
               <span class="profile-meta-tag sec-tag">Sec ${profile?.sectionName || '2A'} • ${profile?.semester || '4th'} Sem</span>
             </div>
           </div>
+        </div>
+
+        <!-- Real-time Photo Capture Drawer / Panel -->
+        <div id="photo-capture-panel" class="photo-capture-panel" style="display: none; background: #0F172A; color: #FFFFFF; border-radius: 14px; padding: 14px; margin-bottom: 16px; position: relative;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 1rem;">📸</span>
+              <strong style="font-size: 0.88rem; color: #F8FAFC;">Student Photo Capture</strong>
+            </div>
+            <button type="button" id="btn-close-photo-capture" style="background: rgba(255,255,255,0.15); border: none; color: #FFFFFF; border-radius: 6px; padding: 3px 8px; font-size: 0.75rem; cursor: pointer;">✕ Close</button>
+          </div>
+
+          <!-- Video Viewport / Preview -->
+          <div style="position: relative; width: 100%; max-width: 220px; height: 220px; margin: 0 auto 10px; background: #000000; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 2px solid #334155;">
+            <video id="photo-capture-video" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block;"></video>
+            <div id="photo-capture-overlay-guide" style="position: absolute; inset: 0; pointer-events: none; display: flex; align-items: center; justify-content: center;">
+              <div style="width: 150px; height: 150px; border-radius: 50%; border: 2px dashed rgba(255,255,255,0.7); box-shadow: 0 0 0 9999px rgba(0,0,0,0.35);"></div>
+            </div>
+            <img id="photo-captured-preview-img" style="display: none; width: 100%; height: 100%; object-fit: cover;" alt="Captured Thumbnail" />
+          </div>
+
+          <!-- Live Capture Actions -->
+          <div id="photo-capture-actions-live" style="display: flex; gap: 8px; justify-content: center;">
+            <button type="button" id="btn-snap-photo" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); color: #FFFFFF; font-weight: 700; font-size: 0.85rem; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(16,185,129,0.3);">
+              📸 Capture
+            </button>
+            <button type="button" id="btn-upload-file-trigger" style="background: rgba(255,255,255,0.12); color: #E2E8F0; font-weight: 600; font-size: 0.82rem; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 8px 12px; cursor: pointer;">
+              📁 Upload File
+            </button>
+          </div>
+
+          <div id="photo-capture-error" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #FCA5A5; font-size: 0.78rem; border-radius: 8px; padding: 8px 10px; margin-top: 10px; text-align: center;"></div>
+
+          <!-- Post-Capture Preview Actions -->
+          <div id="photo-capture-actions-preview" style="display: none; gap: 8px; justify-content: center;">
+            <button type="button" id="btn-save-captured-photo" style="background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%); color: #FFFFFF; font-weight: 700; font-size: 0.85rem; border: none; border-radius: 8px; padding: 8px 16px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(99,102,241,0.3);">
+              ✅ Save Thumbnail
+            </button>
+            <button type="button" id="btn-retake-photo" style="background: rgba(255,255,255,0.15); color: #FFFFFF; font-weight: 600; font-size: 0.82rem; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer;">
+              🔄 Retake
+            </button>
+          </div>
+
+          <p style="text-align: center; font-size: 0.72rem; color: #94A3B8; margin: 8px 0 0 0;">
+            Super-lightweight square thumbnail (~5KB) saved instantly.
+          </p>
         </div>
 
         <!-- Tab Navigation (Personal Details / Security & Password) -->

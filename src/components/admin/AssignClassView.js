@@ -1,9 +1,75 @@
-import { getIndianDateString, getIndianDayName } from '../../utils/dateUtils.js';
+import { getIndianDateString, getIndianTimeVal, getIndianDayName } from '../../utils/dateUtils.js';
 
 /**
  * Weekly Multi-Slot Lecture Assignment View with Inline & Modal Editing
  */
 export const renderAssignClassView = (assignments = [], subjects = [], sections = [], facultyList = []) => {
+  const todayIST = getIndianDateString();
+  const currentTimeIST = getIndianTimeVal();
+
+  // Helper to categorize assignment lifecycle status
+  const getAssignmentStatus = (a) => {
+    const lecDate = a.lec_date || '';
+    const startTime = (a.start_time || a.startTime || '00:00:00').slice(0, 5);
+    const endTime = (a.end_time || a.endTime || '23:59:00').slice(0, 5);
+    const status = (a.status || '').toLowerCase();
+
+    const isExplicitCompleted = status === 'completed';
+    const isOngoing = status === 'ongoing';
+    const isPastDate = !!(lecDate && lecDate < todayIST);
+    const isPastTimeToday = (lecDate === todayIST) && (endTime < currentTimeIST);
+    const isCurrentTimeSlotToday = (lecDate === todayIST) && (startTime <= currentTimeIST && endTime >= currentTimeIST);
+    const isUpcomingTimeToday = (lecDate === todayIST) && (startTime > currentTimeIST);
+    const isFutureDate = !!(lecDate && lecDate > todayIST);
+
+    const isCompleted = isExplicitCompleted || isPastDate || isPastTimeToday;
+    const isLive = !isCompleted && (isOngoing || isCurrentTimeSlotToday);
+
+    let rank = 4; // Completed
+    if (isLive) {
+      rank = 1; // Live / In Progress
+    } else if (isUpcomingTimeToday && !isCompleted) {
+      rank = 2; // Upcoming Today
+    } else if (isFutureDate && !isCompleted) {
+      rank = 3; // Upcoming Next Days
+    }
+
+    return {
+      isCompleted,
+      isLive,
+      isUpcomingToday: rank === 2,
+      isUpcomingFuture: rank === 3,
+      rank,
+      startTime,
+      endTime,
+      lecDate
+    };
+  };
+
+  // Sort assignments: Top Live (1) -> Upcoming Today (2) -> Upcoming Next Days (3) -> Completed (4)
+  const sortedAssignments = [...assignments].sort((a, b) => {
+    const stA = getAssignmentStatus(a);
+    const stB = getAssignmentStatus(b);
+
+    if (stA.rank !== stB.rank) {
+      return stA.rank - stB.rank;
+    }
+
+    // Within completed (rank 4): most recent completed first (date descending, time descending)
+    if (stA.rank === 4) {
+      if (stA.lecDate !== stB.lecDate) {
+        return stB.lecDate.localeCompare(stA.lecDate);
+      }
+      return stB.startTime.localeCompare(stA.startTime);
+    }
+
+    // Within Live / Upcoming (ranks 1, 2, 3): ascending date, then ascending start time
+    if (stA.lecDate !== stB.lecDate) {
+      return stA.lecDate.localeCompare(stB.lecDate);
+    }
+    return stA.startTime.localeCompare(stB.startTime);
+  });
+
   const sectionOptionsHTML = sections.length > 0
     ? `<option value="" disabled selected>Select Classroom / Section...</option>` + sections.map(sec => `
         <option value="${sec.id}">${sec.section_name || sec.sectionName} (${sec.branch || 'CSE'} - ${sec.semester || '4th'})</option>
@@ -30,8 +96,9 @@ export const renderAssignClassView = (assignments = [], subjects = [], sections 
     <option value="${sec.id}">${sec.section_name || sec.sectionName} (${sec.branch || 'CSE'})</option>
   `).join('');
 
-  const tableRowsHTML = assignments.length > 0
-    ? assignments.map((a, idx) => {
+  const tableRowsHTML = sortedAssignments.length > 0
+    ? sortedAssignments.map((a, idx) => {
+        const { isCompleted, isLive } = getAssignmentStatus(a);
         const lecId = a.lec_id || `LEC-${(a.id || '').slice(0, 6).toUpperCase()}`;
         const lecDate = a.lec_date || '—';
         const rawDate = a.lec_date || '';
@@ -47,32 +114,61 @@ export const renderAssignClassView = (assignments = [], subjects = [], sections 
         const timeDisplay = start && end ? `${start.slice(0, 5)} - ${end.slice(0, 5)}` : (start || '—');
         const room = a.room_no || a.roomNo || '—';
 
+        const rowClass = isCompleted ? 'assignment-table-row assignment-row-completed' : (isLive ? 'assignment-table-row assignment-row-live' : 'assignment-table-row');
+        const rowStyle = isCompleted ? 'background: #F8FAFC; color: #64748B;' : '';
+
+        // Status badge / Room badge
+        let roomBadgeHTML = `<span class="badge-status-active">${room}</span>`;
+        if (isCompleted) {
+          roomBadgeHTML = `<span style="background: #F1F5F9; color: #64748B; font-size: 0.76rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; border: 1px solid #E2E8F0;">${room}</span>`;
+        } else if (isLive) {
+          roomBadgeHTML = `<span style="background: #DCFCE7; color: #15803D; font-size: 0.78rem; font-weight: 800; padding: 3px 10px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 4px;">● ${room}</span>`;
+        }
+
+        // Timing display with Live tag if currently running
+        const timingHTML = isLive
+          ? `<strong style="color: #15803D;">${timeDisplay}</strong> <span style="background: #DCFCE7; color: #15803D; font-size: 0.72rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-left: 4px; display: inline-block;">● Live</span>`
+          : (isCompleted ? `<span style="color: #64748B;">${timeDisplay}</span>` : `<strong>${timeDisplay}</strong>`);
+
+        // Actions column: hide Edit and Delete for completed lectures
+        let actionsHTML = '';
+        if (isCompleted) {
+          actionsHTML = `
+            <span style="display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; font-size: 0.78rem; font-weight: 700; border-radius: 6px; background: #F1F5F9; color: #64748B; border: 1px solid #E2E8F0;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Completed
+            </span>
+          `;
+        } else {
+          actionsHTML = `
+            <div style="display: flex; gap: 8px; align-items: center; justify-content: flex-start;">
+              <button type="button" class="btn-edit-assignment" data-id="${a.id}" style="padding: 7px 12px; font-size: 0.82rem; font-weight: 700; border-radius: 8px; background: #EEF2FF; color: #4338CA; border: 1.5px solid #C7D2FE; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease; box-shadow: 0 1px 2px rgba(67, 56, 202, 0.05);" title="Edit Assignment">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                <span style="pointer-events: none;">Edit</span>
+              </button>
+
+              <button type="button" class="btn-delete-assignment" data-id="${a.id}" style="padding: 7px 12px; font-size: 0.82rem; font-weight: 700; border-radius: 8px; background: #FFF1F2; color: #E11D48; border: 1.5px solid #FECDD3; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease; box-shadow: 0 1px 2px rgba(225, 29, 72, 0.05);" title="Delete Assignment">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                <span style="pointer-events: none;">Delete</span>
+              </button>
+            </div>
+          `;
+        }
+
         return `
-          <tr class="assignment-table-row" data-assignment-id="${a.id}" data-faculty-id="${facultyId}" data-lec-date="${rawDate}" data-section-id="${sectionId}">
+          <tr class="${rowClass}" data-assignment-id="${a.id}" data-faculty-id="${facultyId}" data-lec-date="${rawDate}" data-section-id="${sectionId}" style="${rowStyle}">
             <td>${idx + 1}</td>
             <td>
               <code>${lecId}</code><br>
               <small style="color:var(--text-muted); font-weight:600;">${lecDate}</small>
             </td>
             <td><strong>${subjectName}</strong> <small style="color:var(--text-muted);">(${subjectCode})</small></td>
-            <td><span class="badge-tag">Sec ${sectionName}</span></td>
+            <td><span class="badge-tag" style="${isCompleted ? 'background: #F1F5F9; color: #64748B;' : ''}">Sec ${sectionName}</span></td>
             <td>${facultyName}</td>
             <td><strong>${day}</strong></td>
-            <td>${timeDisplay}</td>
-            <td><span class="badge-status-active">${room}</span></td>
-            <td>
-              <div style="display: flex; gap: 8px; align-items: center; justify-content: flex-start;">
-                <button type="button" class="btn-edit-assignment" data-id="${a.id}" style="padding: 7px 12px; font-size: 0.82rem; font-weight: 700; border-radius: 8px; background: #EEF2FF; color: #4338CA; border: 1.5px solid #C7D2FE; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease; box-shadow: 0 1px 2px rgba(67, 56, 202, 0.05);" title="Edit Assignment">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                  <span style="pointer-events: none;">Edit</span>
-                </button>
-
-                <button type="button" class="btn-delete-assignment" data-id="${a.id}" style="padding: 7px 12px; font-size: 0.82rem; font-weight: 700; border-radius: 8px; background: #FFF1F2; color: #E11D48; border: 1.5px solid #FECDD3; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s ease; box-shadow: 0 1px 2px rgba(225, 29, 72, 0.05);" title="Delete Assignment">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="pointer-events: none;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                  <span style="pointer-events: none;">Delete</span>
-                </button>
-              </div>
-            </td>
+            <td>${timingHTML}</td>
+            <td>${roomBadgeHTML}</td>
+            <td>${actionsHTML}</td>
           </tr>
         `;
       }).join('')

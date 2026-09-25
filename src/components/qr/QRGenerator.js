@@ -23,13 +23,10 @@ export class QRGenerator {
   async refresh(fetchTokenCallback) {
     try {
       this.remainingSeconds = this.refreshIntervalSec;
-      const payload = fetchTokenCallback ? await fetchTokenCallback() : {
-        s: this.sessionId,
-        t: Math.random().toString(36).substring(2, 15),
-        exp: new Date(Date.now() + this.refreshIntervalSec * 1000).toISOString()
-      };
+      const payload = fetchTokenCallback ? await fetchTokenCallback() : `${this.sessionId || 'sess-live'}:${Math.random().toString(36).substring(2, 12)}`;
+      const payloadString = typeof payload === 'string' ? payload : JSON.stringify(payload);
 
-      await this.renderQRCode(JSON.stringify(payload));
+      await this.renderQRCode(payloadString);
       this.onTokenChange(payload);
     } catch (err) {
       console.error('Error refreshing QR Code:', err);
@@ -46,7 +43,7 @@ export class QRGenerator {
         margin: 2,
         errorCorrectionLevel: 'M',
         color: {
-          dark: '#1E1B4B',
+          dark: '#000000',
           light: '#FFFFFF'
         }
       });

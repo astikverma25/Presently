@@ -32,11 +32,25 @@ export class StudentService {
         const sectionId = student.section_id || student.sections?.id;
         const studentSem = student.semester || student.sections?.semester || '3rd';
         const cleanSem = studentSem.toString().toLowerCase().replace(/[^0-9]/g, '').trim();
+        const todayIST = getIndianDateString();
+        const currentTimeIST = getIndianTimeVal();
 
-        // 1. Fetch all subjects for student's current semester
-        const { data: allSubjects } = await supabase
-          .from('subjects')
-          .select('id, semester');
+        // 1. Fetch subjects, assignments, and attendance records IN PARALLEL for high speed
+        const [
+          { data: allSubjects },
+          { data: assignments },
+          { data: records }
+        ] = await Promise.all([
+          supabase.from('subjects').select('id, semester'),
+          sectionId
+            ? supabase.from('faculty_assignment').select('id, subject_id, section_id, lec_date, start_time, end_time, status').eq('section_id', sectionId)
+            : Promise.resolve({ data: [] }),
+          supabase.from('attendance_records').select(`
+            id,
+            status,
+            faculty_assignment:faculty_assignment_id (subject_id)
+          `).eq('student_id', student.id).ilike('status', 'present')
+        ]);
 
         const semesterSubjectIds = new Set(
           (allSubjects || [])
@@ -48,56 +62,33 @@ export class StudentService {
         );
 
         // 2. Calculate completed / delivered classes for student's section
-        const todayIST = getIndianDateString();
-        const currentTimeIST = getIndianTimeVal();
         let totalCompletedClasses = 0;
+        (assignments || []).forEach(fa => {
+          if (!fa.subject_id) return;
+          if (semesterSubjectIds.size > 0 && !semesterSubjectIds.has(fa.subject_id)) return;
 
-        if (sectionId) {
-          const { data: assignments } = await supabase
-            .from('faculty_assignment')
-            .select('id, subject_id, section_id, lec_date, start_time, end_time, status')
-            .eq('section_id', sectionId);
+          const lecDate = fa.lec_date ? fa.lec_date.trim() : null;
+          let isCompleted = false;
 
-          (assignments || []).forEach(fa => {
-            if (!fa.subject_id) return;
-            if (semesterSubjectIds.size > 0 && !semesterSubjectIds.has(fa.subject_id)) return;
-
-            const lecDate = fa.lec_date ? fa.lec_date.trim() : null;
-            let isCompleted = false;
-
-            if (fa.status === 'completed') {
+          if (fa.status === 'completed') {
+            isCompleted = true;
+          } else if (lecDate) {
+            if (lecDate < todayIST) {
               isCompleted = true;
-            } else if (lecDate) {
-              if (lecDate < todayIST) {
+            } else if (lecDate === todayIST) {
+              const startTime = fa.start_time ? fa.start_time.slice(0, 5) : '00:00';
+              if (currentTimeIST >= startTime) {
                 isCompleted = true;
-              } else if (lecDate === todayIST) {
-                const startTime = fa.start_time ? fa.start_time.slice(0, 5) : '00:00';
-                if (currentTimeIST >= startTime) {
-                  isCompleted = true;
-                }
               }
             }
+          }
 
-            if (isCompleted) {
-              totalCompletedClasses++;
-            }
-          });
-        }
+          if (isCompleted) {
+            totalCompletedClasses++;
+          }
+        });
 
         // 3. Calculate attended classes for this student in this semester
-        const { data: records } = await supabase
-          .from('attendance_records')
-          .select(`
-            id,
-            status,
-            faculty_assignment:faculty_assignment_id (subject_id),
-            attendance_sessions:session_id (
-              faculty_assignment:faculty_assignment_id (subject_id)
-            )
-          `)
-          .eq('student_id', student.id)
-          .ilike('status', 'present');
-
         const attendedRecords = (records || []).filter(r => {
           const subId = r.faculty_assignment?.subject_id || r.attendance_sessions?.faculty_assignment?.subject_id;
           if (semesterSubjectIds.size > 0 && subId) {
@@ -120,6 +111,7 @@ export class StudentService {
           parentContact: student.parent_contact || '',
           dateOfBirth: student.date_of_birth || '',
           admissionId: student.admission_id || '',
+          photoUrl: student.photo_url || '',
           sectionId: student.section_id,
           sectionName: student.sections?.section_name || '2A',
           semester: student.semester || student.sections?.semester || '3rd',
@@ -143,6 +135,7 @@ export class StudentService {
       personalEmail: '',
       phone: '',
       parentContact: '',
+      photoUrl: '',
       sectionName: '2A',
       semester: '4th',
       branch: 'CSE',
@@ -152,6 +145,44 @@ export class StudentService {
       totalClasses: 0,
       attendancePercentage: 100
     };
+  }
+
+  /**
+   * Updates student profile photo thumbnail (base64 or URL)
+   */
+  static async updateProfilePhoto(studentId, photoDataUri) {
+    try {
+      if (!studentId || studentId === 'demo-student') {
+        return { success: true, message: 'Demo photo updated.', photoUrl: photoDataUri };
+      }
+
+      const { error } = await supabase
+        .from('students')
+        .update({ photo_url: photoDataUri })
+        .eq('id', studentId);
+
+      if (error) throw error;
+
+      // Update local storage session if student is currently logged in
+      try {
+        const raw = localStorage.getItem('presently_auth_session');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.user && parsed.user.id === studentId) {
+            parsed.user.photo_url = photoDataUri;
+            parsed.user.photoUrl = photoDataUri;
+            localStorage.setItem('presently_auth_session', JSON.stringify(parsed));
+          }
+        }
+      } catch (e) {
+        console.warn('Session sync photo error:', e);
+      }
+
+      return { success: true, message: 'Profile photo updated successfully!', photoUrl: photoDataUri };
+    } catch (err) {
+      console.error('Failed to update student profile photo:', err);
+      return { success: false, message: err?.message || 'Failed to update photo' };
+    }
   }
 
   /**
@@ -268,8 +299,22 @@ export class StudentService {
   /**
    * 2. Fetches active live QR session or currently running scheduled lecture for this student's section & semester
    */
-  static async getCurrentLecture(studentSectionId = null, studentSectionName = '2A', studentSemester = null) {
+  static async getCurrentLecture(studentSectionId = null, studentSectionName = null, studentSemester = null) {
     try {
+      if (!studentSectionId && !studentSectionName) {
+        return {
+          id: null,
+          sessionId: null,
+          isLive: false,
+          subjectName: 'No Active Lecture',
+          subjectCode: '',
+          roomNo: '',
+          facultyName: '',
+          timeWindow: 'No classes scheduled right now',
+          badgeText: 'Standby'
+        };
+      }
+
       const todayIST = getIndianDateString();
       const now = new Date();
       const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -299,12 +344,11 @@ export class StudentService {
       const cleanSec = (s) => (s || '').toString().toLowerCase().replace(/^(sec|section)\s*/, '').replace(/[^a-z0-9]/g, '').trim();
       const matchSection = (assignmentSec) => {
         if (!assignmentSec) return false;
-        if (studentSectionId && assignmentSec.id === studentSectionId) return true;
+        if (studentSectionId && assignmentSec.id && assignmentSec.id === studentSectionId) return true;
         if (studentSectionName && assignmentSec.section_name) {
           const s1 = cleanSec(assignmentSec.section_name);
           const s2 = cleanSec(studentSectionName);
-          if (s1 === s2) return true;
-          if (s1 && s2 && (s1.includes(s2) || s2.includes(s1))) return true;
+          if (s1 && s2 && s1 === s2) return true;
         }
         return false;
       };
@@ -327,64 +371,8 @@ export class StudentService {
         return lecDate === todayIST || lecDate === todayLocal;
       };
 
-      // 1. Check if there is an ACTIVE live QR session right now for this student's section
-      const { data: activeSessions, error: sessErr } = await supabase
-        .from('attendance_sessions')
-        .select(`
-          id,
-          status,
-          started_at,
-          faculty_assignment:faculty_assignment_id (
-            id,
-            lec_id,
-            lec_date,
-            start_time,
-            end_time,
-            room_no,
-            subject_id,
-            section_id,
-            faculty:faculty_id (id, name, department),
-            subject:subject_id (id, subject_name, subject_code, semester),
-            section:section_id (id, section_name, branch, semester)
-          )
-        `)
-        .eq('status', 'active')
-        .order('started_at', { ascending: false });
-
-      if (sessErr) {
-        console.warn('activeSessions query error:', sessErr.message);
-      }
-
-      const matchedActive = (activeSessions || []).find(s => {
-        const fa = s.faculty_assignment;
-        if (!fa) return false;
-        const isSessToday = isTodayMatch(fa.lec_date) || isTodayMatch(getIndianDateString(s.started_at));
-        if (!isSessToday) return false;
-        const sec = fa.section || (fa.section_id ? { id: fa.section_id } : null);
-        const sub = fa.subject;
-        return matchSection(sec) && matchSemester(sec, sub);
-      });
-
-      if (matchedActive) {
-        const fa = matchedActive.faculty_assignment;
-        const sub = fa.subject;
-        const timeSlot = fa.start_time && fa.end_time ? `${fa.start_time.slice(0, 5)} - ${fa.end_time.slice(0, 5)}` : 'Live Now';
-        return {
-          id: fa.id,
-          lecId: fa.lec_id,
-          sessionId: matchedActive.id,
-          isLive: true,
-          subjectName: sub ? `${sub.subject_name}${sub.subject_code ? ` (${sub.subject_code})` : ''}` : 'Class Lecture',
-          subjectCode: sub?.subject_code || 'CS',
-          roomNo: fa.room_no || 'Room 101',
-          facultyName: fa.faculty?.name || 'Faculty Instructor',
-          timeWindow: timeSlot,
-          badgeText: 'Live Session Active'
-        };
-      }
-
-      // 2. Fetch today's scheduled lectures from faculty_assignment
-      const { data: assignments, error: assignErr } = await supabase
+      // Fetch today's scheduled lectures from faculty_assignment for student's section & semester (filtered by today's date)
+      let assignQuery = supabase
         .from('faculty_assignment')
         .select(`
           id,
@@ -400,7 +388,14 @@ export class StudentService {
           subject:subject_id (id, subject_name, subject_code, semester),
           section:section_id (id, section_name, branch, semester)
         `)
+        .in('lec_date', [todayIST, todayLocal])
         .order('start_time', { ascending: true });
+
+      if (studentSectionId) {
+        assignQuery = assignQuery.eq('section_id', studentSectionId);
+      }
+
+      const { data: assignments, error: assignErr } = await assignQuery;
 
       if (assignErr) {
         console.warn('assignments query error:', assignErr.message);
@@ -481,32 +476,21 @@ export class StudentService {
             room_no,
             subject_id,
             section_id,
+            faculty:faculty_id (name),
             subject:subject_id (id, subject_name, subject_code),
             section:section_id (id, section_name, branch, semester)
-          ),
-          attendance_sessions:session_id (
-            id,
-            started_at,
-            faculty_assignment:faculty_assignment_id (
-              id,
-              lec_id,
-              lec_date,
-              start_time,
-              end_time,
-              room_no,
-              subject_id,
-              section_id,
-              subject:subject_id (id, subject_name, subject_code),
-              section:section_id (id, section_name, branch, semester)
-            )
           )
         `)
         .eq('student_id', studentId);
 
+      if (error) {
+        console.warn('Error fetching attendance history:', error.message);
+      }
+
       if (records && records.length) {
         // Collect missing assignment details by lec_id if needed
         const missingLecIds = records
-          .filter(r => !r.faculty_assignment && !r.attendance_sessions?.faculty_assignment && r.lec_id)
+          .filter(r => !r.faculty_assignment && r.lec_id)
           .map(r => r.lec_id);
 
         let lecIdMap = new Map();
@@ -531,8 +515,7 @@ export class StudentService {
         }
 
         const formattedList = records.map(r => {
-          const sess = r.attendance_sessions;
-          const fa = r.faculty_assignment || sess?.faculty_assignment || (r.lec_id ? lecIdMap.get(r.lec_id) : null);
+          const fa = r.faculty_assignment || (r.lec_id ? lecIdMap.get(r.lec_id) : null);
           const sub = fa?.subject;
           const sec = fa?.section;
 
@@ -561,8 +544,11 @@ export class StudentService {
             subjectName: subjectName,
             subjectCode: sub?.subject_code || 'CS',
             roomNo: fa?.room_no || 'Room',
-            status: r.status || 'present',
-            verificationMethod: r.verification_method === 'qr_scan' ? 'QR Scan' : 'Manual'
+            facultyName: fa?.faculty?.name || 'Faculty',
+            sectionName: sec?.section_name || 'Section',
+            semester: sec?.semester || sub?.semester || 'Semester',
+            status: (r.status || 'present').toLowerCase(),
+            method: r.verification_method || 'Dynamic QR Scan'
           };
         });
 
@@ -581,39 +567,55 @@ export class StudentService {
   /**
    * 4. Fetches subject-wise and semester-wise attendance report for student
    */
-  static async getSubjectAttendanceReport(studentId = null, semester = null) {
+  static async getSubjectAttendanceReport(studentId = null, semester = null, sectionId = null) {
     try {
-      // 1. Resolve student record to find section & semester
-      let std = null;
-      if (studentId) {
-        const { data: stdData } = await supabase
-          .from('students')
-          .select('*, sections:section_id(*)')
-          .eq('id', studentId)
-          .maybeSingle();
-        std = stdData;
+      let resolvedSectionId = sectionId;
+      let effectiveSem = semester;
+
+      if (!studentId || !resolvedSectionId || !effectiveSem) {
+        let std = null;
+        if (studentId) {
+          const { data: stdData } = await supabase
+            .from('students')
+            .select('*, sections:section_id(*)')
+            .eq('id', studentId)
+            .maybeSingle();
+          std = stdData;
+        }
+
+        if (!std) {
+          const profile = await this.getProfile();
+          if (!profile) return { semester: semester || '3rd', totalAttended: 0, totalClasses: 0, overallPercentage: 100, subjects: [] };
+          studentId = profile.id;
+          resolvedSectionId = resolvedSectionId || profile.sectionId;
+          effectiveSem = effectiveSem || profile.semester;
+        } else {
+          resolvedSectionId = resolvedSectionId || std.section_id || std.sections?.id;
+          effectiveSem = effectiveSem || std.semester || std.sections?.semester;
+        }
       }
 
-      if (!std) {
-        const profile = await this.getProfile();
-        studentId = profile.id;
-        const { data: stdData } = await supabase
-          .from('students')
-          .select('*, sections:section_id(*)')
-          .eq('id', studentId)
-          .maybeSingle();
-        std = stdData;
-      }
+      const cleanSem = (effectiveSem || '3rd').toString().toLowerCase().replace(/[^0-9]/g, '').trim();
 
-      const effectiveSem = semester || std?.semester || std?.sections?.semester || '3rd';
-      const cleanSem = effectiveSem.toString().toLowerCase().replace(/[^0-9]/g, '').trim();
-      const sectionId = std?.section_id || std?.sections?.id;
-
-      // 2. Fetch subjects for the specified semester
-      const { data: allSubjects } = await supabase
-        .from('subjects')
-        .select('*')
-        .order('subject_code', { ascending: true });
+      // Parallel fetch: subjects, student attendance records, and section assignments
+      const [
+        { data: allSubjects },
+        { data: records },
+        { data: assignments }
+      ] = await Promise.all([
+        supabase.from('subjects').select('*').order('subject_code', { ascending: true }),
+        supabase.from('attendance_records').select(`
+          id,
+          status,
+          marked_at,
+          lec_id,
+          faculty_assignment_id,
+          faculty_assignment:faculty_assignment_id (id, subject_id, section_id)
+        `).eq('student_id', studentId),
+        resolvedSectionId
+          ? supabase.from('faculty_assignment').select('id, subject_id, section_id, lec_date, start_time, end_time, status').eq('section_id', resolvedSectionId)
+          : Promise.resolve({ data: [] })
+      ]);
 
       const filteredSubjects = (allSubjects || []).filter(sub => {
         const subSem = (sub.semester || '').toString().toLowerCase().replace(/[^0-9]/g, '').trim();
@@ -621,71 +623,36 @@ export class StudentService {
       });
 
       const semesterSubjectIds = new Set(filteredSubjects.map(s => s.id));
-
-      // 3. Fetch all attendance records of this student
-      const { data: records } = await supabase
-        .from('attendance_records')
-        .select(`
-          id,
-          status,
-          marked_at,
-          lec_id,
-          faculty_assignment_id,
-          faculty_assignment:faculty_assignment_id (
-            id,
-            subject_id,
-            section_id
-          ),
-          attendance_sessions:session_id (
-            id,
-            faculty_assignment:faculty_assignment_id (
-              id,
-              subject_id,
-              section_id
-            )
-          )
-        `)
-        .eq('student_id', studentId);
-
       const todayIST = getIndianDateString();
       const currentTimeIST = getIndianTimeVal();
 
-      // 4. Calculate delivered/completed classes directly from faculty_assignment using lecture date & time
+      // Calculate delivered/completed classes directly from faculty_assignment using lecture date & time
       let totalCompletedBySubject = new Map();
-      if (sectionId) {
-        const { data: assignments } = await supabase
-          .from('faculty_assignment')
-          .select('id, subject_id, section_id, lec_date, start_time, end_time, status')
-          .eq('section_id', sectionId);
+      (assignments || []).forEach(fa => {
+        if (!fa.subject_id) return;
+        if (semesterSubjectIds.size > 0 && !semesterSubjectIds.has(fa.subject_id)) return;
 
-        (assignments || []).forEach(fa => {
-          if (!fa.subject_id) return;
-          if (semesterSubjectIds.size > 0 && !semesterSubjectIds.has(fa.subject_id)) return;
+        const lecDate = fa.lec_date ? fa.lec_date.trim() : null;
+        let isCompleted = false;
 
-          const lecDate = fa.lec_date ? fa.lec_date.trim() : null;
-          let isCompleted = false;
-
-          if (fa.status === 'completed') {
+        if (fa.status === 'completed') {
+          isCompleted = true;
+        } else if (lecDate) {
+          if (lecDate < todayIST) {
             isCompleted = true;
-          } else if (lecDate) {
-            if (lecDate < todayIST) {
-              // Past date -> completed class
+          } else if (lecDate === todayIST) {
+            const startTime = fa.start_time ? fa.start_time.slice(0, 5) : '00:00';
+            if (currentTimeIST >= startTime) {
               isCompleted = true;
-            } else if (lecDate === todayIST) {
-              // Today's date -> completed if scheduled start time has passed or arrived
-              const startTime = fa.start_time ? fa.start_time.slice(0, 5) : '00:00';
-              if (currentTimeIST >= startTime) {
-                isCompleted = true;
-              }
             }
           }
+        }
 
-          if (isCompleted) {
-            const current = totalCompletedBySubject.get(fa.subject_id) || 0;
-            totalCompletedBySubject.set(fa.subject_id, current + 1);
-          }
-        });
-      }
+        if (isCompleted) {
+          const current = totalCompletedBySubject.get(fa.subject_id) || 0;
+          totalCompletedBySubject.set(fa.subject_id, current + 1);
+        }
+      });
 
       // 5. Map attendance metrics per subject (only completed/delivered classes)
       const subjectReport = filteredSubjects.map(sub => {
@@ -741,34 +708,61 @@ export class StudentService {
   static async submitAttendanceScan(scannedPayload, studentId = null) {
     console.log('[StudentService] Processing QR scan verification:', scannedPayload);
 
-    let parsed = scannedPayload;
+    let sessionId = null;
+    let qrToken = null;
+
+    // 1. Parse payload: Support both compact <sessionId>:<token> and legacy JSON
     if (typeof scannedPayload === 'string') {
-      try {
-        parsed = JSON.parse(scannedPayload);
-      } catch (e) {
-        return { success: false, message: 'Invalid QR code format. Please scan a valid classroom QR.' };
+      const trimmed = scannedPayload.trim();
+      if (trimmed.includes(':') && !trimmed.startsWith('{')) {
+        const parts = trimmed.split(':');
+        sessionId = parts[0];
+        qrToken = parts.slice(1).join(':');
+      } else {
+        try {
+          const parsed = JSON.parse(trimmed);
+          sessionId = parsed.sessionId || parsed.s;
+          qrToken = parsed.sig || parsed.t || parsed.token;
+        } catch (e) {
+          sessionId = trimmed;
+        }
       }
+    } else if (typeof scannedPayload === 'object' && scannedPayload !== null) {
+      sessionId = scannedPayload.sessionId || scannedPayload.s;
+      qrToken = scannedPayload.sig || scannedPayload.t || scannedPayload.token;
     }
 
-    if (!parsed || !parsed.sessionId) {
-      return { success: false, message: 'Unrecognized attendance QR code.' };
+    if (!sessionId) {
+      return { success: false, message: 'Unrecognized attendance QR code format.' };
     }
 
-    // 1. Cryptographic Time-Window (TOTP) Verification
-    if (parsed.sig && parsed.ts) {
-      const totpCheck = await verifyTotpPayload(parsed, parsed.expiresIn || 15, 5);
-      if (!totpCheck.isValid) {
-        return {
-          success: false,
-          message: totpCheck.reason || 'QR code expired or invalid.'
-        };
+    // 2. Fast-Path: Single Atomic Database RPC Call (1 Single HTTP Roundtrip)
+    try {
+      if (!sessionId.startsWith('sess-')) {
+        let activeStudentId = studentId;
+        if (!activeStudentId) {
+          const profile = await this.getProfile();
+          activeStudentId = profile?.id;
+        }
+
+        const { data: rpcData, error: rpcErr } = await supabase.rpc('submit_student_qr_scan', {
+          p_session_id: sessionId,
+          p_token: qrToken,
+          p_student_id: activeStudentId
+        });
+
+        if (!rpcErr && rpcData) {
+          return rpcData;
+        }
       }
+    } catch (rpcEx) {
+      console.warn('RPC fast-path fallback:', rpcEx);
     }
 
-    // 2. Resolve active session from Supabase
+    // 3. Fallback direct client resolution (for offline mocks or standard queries)
     try {
       let session = null;
-      if (!parsed.sessionId.startsWith('sess-')) {
+      if (!sessionId.startsWith('sess-')) {
         const { data: sessData, error: sessErr } = await supabase
           .from('attendance_sessions')
           .select(`
@@ -786,7 +780,7 @@ export class StudentService {
               subject:subject_id (id, subject_name, subject_code)
             )
           `)
-          .eq('id', parsed.sessionId)
+          .eq('id', sessionId)
           .single();
 
         if (sessErr || !sessData) {
@@ -799,7 +793,28 @@ export class StudentService {
         return { success: false, message: 'This attendance session has ended.' };
       }
 
-      // 3. Resolve student ID & enrolled section record
+      // 3. Dynamic Token and Expiry verification against active DB session
+      if (session && qrToken && session.current_qr_token) {
+        if (session.current_qr_token !== qrToken) {
+          return {
+            success: false,
+            message: 'QR code expired or invalid. Please scan the current live screen.'
+          };
+        }
+
+        if (session.token_expires_at) {
+          const expiryTime = new Date(session.token_expires_at).getTime();
+          // Allow 5-second network grace window
+          if (Date.now() > expiryTime + 5000) {
+            return {
+              success: false,
+              message: 'QR code expired. Please scan the live projector screen.'
+            };
+          }
+        }
+      }
+
+      // 4. Resolve student ID & enrolled section record
       let targetStudentId = studentId;
       let studentRecord = null;
 
@@ -827,10 +842,10 @@ export class StudentService {
         return { success: false, message: 'Student identification not found. Please log in again.' };
       }
 
-      // 4. Section Eligibility Check: Ensure student is in the section this lecture is scheduled for
+      // 5. Section Eligibility Check: Ensure student is in the section this lecture is scheduled for
       const sessionSectionId = session?.faculty_assignment?.section_id;
-      const sessionSectionName = session?.faculty_assignment?.section?.section_name || parsed.section;
-      const sessionSubjectName = session?.faculty_assignment?.subject?.subject_name || parsed.className || 'Lecture';
+      const sessionSectionName = session?.faculty_assignment?.section?.section_name || 'Assigned Section';
+      const sessionSubjectName = session?.faculty_assignment?.subject?.subject_name || 'Lecture';
       const studentSectionId = studentRecord.section_id;
       const studentSectionName = studentRecord.sections?.section_name || 'Enrolled Section';
 
@@ -845,11 +860,12 @@ export class StudentService {
         };
       }
 
-      const sessionIdToSave = session ? session.id : parsed.sessionId;
-      const assignmentIdToSave = session ? session.faculty_assignment_id : parsed.assignmentId || null;
-      const lectureDateToSave = session?.faculty_assignment?.lec_date || parsed.lecDate || getIndianDateString();
+      const sessionIdToSave = session ? session.id : sessionId;
+      const assignmentIdToSave = session ? session.faculty_assignment_id : null;
+      const lectureDateToSave = session?.faculty_assignment?.lec_date || getIndianDateString();
+      const lecIdToSave = session?.faculty_assignment?.lec_id || null;
 
-      // 5. Duplicate & Existing Record Check
+      // 6. Duplicate & Existing Record Check
       let existingRecord = null;
 
       if (sessionIdToSave) {
@@ -884,7 +900,7 @@ export class StudentService {
         };
       }
 
-      // Additional Check: Check if student already marked attendance for this lecture/assignment today
+      // Check if student already marked attendance for this lecture/assignment today
       if (assignmentIdToSave) {
         const { data: duplicateDateRecords } = await supabase
           .from('attendance_records')
@@ -893,7 +909,7 @@ export class StudentService {
           .eq('status', 'present');
 
         const alreadyMarkedToday = (duplicateDateRecords || []).find(r => 
-          (r.faculty_assignment_id === assignmentIdToSave || (parsed.lecId && r.lec_id === parsed.lecId)) &&
+          (r.faculty_assignment_id === assignmentIdToSave || (lecIdToSave && r.lec_id === lecIdToSave)) &&
           r.lecture_date === lectureDateToSave
         );
 
@@ -910,12 +926,12 @@ export class StudentService {
         }
       }
 
-      // 6. Record attendance: In-place UPDATE on existing record if it already exists (e.g. from previous absent mark)
+      // 7. Record attendance: In-place UPDATE on existing record if it already exists (e.g. from previous absent mark)
       const recordPayload = {
         session_id: sessionIdToSave,
         student_id: targetStudentId,
         faculty_assignment_id: assignmentIdToSave,
-        lec_id: parsed.lecId || null,
+        lec_id: lecIdToSave,
         lecture_date: lectureDateToSave,
         status: 'present',
         marked_at: new Date().toISOString(),
@@ -939,7 +955,7 @@ export class StudentService {
 
       return {
         success: true,
-        message: `Attendance marked successfully for ${parsed.className || parsed.class || 'Lecture'}!`,
+        message: `Attendance marked successfully for ${sessionSubjectName}!`,
         record: newRec
       };
     } catch (err) {

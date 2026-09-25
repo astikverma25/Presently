@@ -9,6 +9,7 @@ import { showScanFeedbackModal } from './ScanFeedbackModal.js';
 import { StudentService } from '../../services/studentService.js';
 import { QRScanner } from '../qr/QRScanner.js';
 import { validateStrongPassword } from '../../utils/totpCrypto.js';
+import { createThumbnailFromMedia, openCameraStream, stopCameraStream, renderStudentThumbnail } from '../../utils/avatarUtils.js';
 
 /**
  * Master Student Dashboard Module Coordinator (Mobile-Responsive & Drawer-Enabled)
@@ -59,10 +60,19 @@ export class StudentDashboardApp {
       }
 
       this.selectedSemester = this.profile?.semester || '3rd';
-      this.currentLecture = await StudentService.getCurrentLecture(this.profile?.sectionId, this.profile?.sectionName, this.profile?.semester);
-      this.historyList = await StudentService.getAttendanceHistory(this.profile?.id);
-      this.reportData = await StudentService.getSubjectAttendanceReport(this.profile?.id, this.selectedSemester);
-      this.sections = await StudentService.getAvailableSections();
+
+      // Parallelize all dashboard queries to load data concurrently
+      const [currentLecture, historyList, reportData, sections] = await Promise.all([
+        StudentService.getCurrentLecture(this.profile?.sectionId, this.profile?.sectionName, this.profile?.semester),
+        StudentService.getAttendanceHistory(this.profile?.id),
+        StudentService.getSubjectAttendanceReport(this.profile?.id, this.selectedSemester, this.profile?.sectionId),
+        StudentService.getAvailableSections()
+      ]);
+
+      this.currentLecture = currentLecture;
+      this.historyList = historyList;
+      this.reportData = reportData;
+      this.sections = sections;
     } catch (err) {
       console.error('Student Portal load error:', err);
     } finally {
@@ -178,7 +188,7 @@ export class StudentDashboardApp {
 
       // Silent background sync
       if (newTab === 'report') {
-        const freshReport = await StudentService.getSubjectAttendanceReport(this.profile?.id, this.selectedSemester);
+        const freshReport = await StudentService.getSubjectAttendanceReport(this.profile?.id, this.selectedSemester, this.profile?.sectionId);
         this.reportData = freshReport;
         if (reportPane) {
           reportPane.innerHTML = renderStudentReport(this.reportData, this.selectedSemester);
@@ -222,6 +232,7 @@ export class StudentDashboardApp {
     };
 
     const closeProfileModal = () => {
+      stopPhotoCapture();
       if (profileModal) profileModal.classList.remove('active');
     };
 
@@ -232,6 +243,164 @@ export class StudentDashboardApp {
     if (profileModal) {
       profileModal.addEventListener('click', (e) => {
         if (e.target === profileModal) closeProfileModal();
+      });
+    }
+
+    // 3.5 Real-Time Student Photo Capture & Thumbnail Processing
+    const photoCapturePanel = this.container.querySelector('#photo-capture-panel');
+    const avatarActionWrap = this.container.querySelector('.profile-avatar-action-wrap');
+    const triggerPhotoBtn = this.container.querySelector('#btn-trigger-photo-capture');
+    const quickTakePhotoBtn = this.container.querySelector('#btn-quick-take-photo');
+    const closePhotoCaptureBtn = this.container.querySelector('#btn-close-photo-capture');
+    const videoEl = this.container.querySelector('#photo-capture-video');
+    const overlayGuide = this.container.querySelector('#photo-capture-overlay-guide');
+    const capturedPreviewImg = this.container.querySelector('#photo-captured-preview-img');
+    const actionsLive = this.container.querySelector('#photo-capture-actions-live');
+    const actionsPreview = this.container.querySelector('#photo-capture-actions-preview');
+    const captureErrorBox = this.container.querySelector('#photo-capture-error');
+    const snapBtn = this.container.querySelector('#btn-snap-photo');
+    const uploadTriggerBtn = this.container.querySelector('#btn-upload-file-trigger');
+    const fileInput = this.container.querySelector('#input-student-photo-file');
+    const savePhotoBtn = this.container.querySelector('#btn-save-captured-photo');
+    const retakePhotoBtn = this.container.querySelector('#btn-retake-photo');
+    const avatarPreviewContainer = this.container.querySelector('#profile-modal-avatar-preview');
+
+    let currentCapturedThumbnail = null;
+
+    const startPhotoCapture = async () => {
+      if (!photoCapturePanel) return;
+      photoCapturePanel.style.display = 'block';
+      if (actionsLive) actionsLive.style.display = 'flex';
+      if (actionsPreview) actionsPreview.style.display = 'none';
+      if (videoEl) videoEl.style.display = 'block';
+      if (overlayGuide) overlayGuide.style.display = 'flex';
+      if (capturedPreviewImg) capturedPreviewImg.style.display = 'none';
+      if (captureErrorBox) captureErrorBox.style.display = 'none';
+
+      try {
+        await openCameraStream(videoEl, 'user');
+      } catch (err) {
+        console.warn('Could not open camera stream:', err);
+        if (captureErrorBox) {
+          captureErrorBox.innerHTML = `⚠️ <strong>Camera access:</strong> ${err.message || 'Permission denied or camera busy'}.<br><span style="font-size: 0.72rem; opacity: 0.9;">Please allow camera permissions in browser, or use <strong>"Upload File"</strong> to pick a photo.</span>`;
+          captureErrorBox.style.display = 'block';
+        }
+      }
+    };
+
+    const stopPhotoCapture = () => {
+      stopCameraStream(videoEl);
+      if (photoCapturePanel) photoCapturePanel.style.display = 'none';
+      if (captureErrorBox) captureErrorBox.style.display = 'none';
+      currentCapturedThumbnail = null;
+    };
+
+    if (avatarActionWrap) avatarActionWrap.addEventListener('click', (e) => {
+      // Don't trigger if file input itself was clicked directly
+      if (e.target !== fileInput) startPhotoCapture();
+    });
+    if (triggerPhotoBtn) triggerPhotoBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startPhotoCapture();
+    });
+    if (quickTakePhotoBtn) quickTakePhotoBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      startPhotoCapture();
+    });
+    if (closePhotoCaptureBtn) closePhotoCaptureBtn.addEventListener('click', stopPhotoCapture);
+
+    // Snap photo from webcam stream
+    if (snapBtn && videoEl) {
+      snapBtn.addEventListener('click', async () => {
+        try {
+          const thumbUri = await createThumbnailFromMedia(videoEl, 256, 0.84);
+          currentCapturedThumbnail = thumbUri;
+
+          stopCameraStream(videoEl);
+          if (videoEl) videoEl.style.display = 'none';
+          if (overlayGuide) overlayGuide.style.display = 'none';
+          if (capturedPreviewImg) {
+            capturedPreviewImg.src = thumbUri;
+            capturedPreviewImg.style.display = 'block';
+          }
+          if (actionsLive) actionsLive.style.display = 'none';
+          if (actionsPreview) actionsPreview.style.display = 'flex';
+        } catch (err) {
+          console.error('Failed to capture frame:', err);
+        }
+      });
+    }
+
+    // Upload file picker
+    if (uploadTriggerBtn && fileInput) {
+      uploadTriggerBtn.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+          const thumbUri = await createThumbnailFromMedia(file, 256, 0.84);
+          currentCapturedThumbnail = thumbUri;
+
+          stopCameraStream(videoEl);
+          if (videoEl) videoEl.style.display = 'none';
+          if (overlayGuide) overlayGuide.style.display = 'none';
+          if (capturedPreviewImg) {
+            capturedPreviewImg.src = thumbUri;
+            capturedPreviewImg.style.display = 'block';
+          }
+          if (actionsLive) actionsLive.style.display = 'none';
+          if (actionsPreview) actionsPreview.style.display = 'flex';
+        } catch (err) {
+          console.error('Failed to process uploaded file:', err);
+        }
+      });
+    }
+
+    // Retake photo
+    if (retakePhotoBtn) {
+      retakePhotoBtn.addEventListener('click', startPhotoCapture);
+    }
+
+    // Save captured photo
+    if (savePhotoBtn) {
+      savePhotoBtn.addEventListener('click', async () => {
+        if (!currentCapturedThumbnail || !this.profile?.id) return;
+        savePhotoBtn.disabled = true;
+        savePhotoBtn.textContent = 'Saving...';
+
+        try {
+          const res = await StudentService.updateProfilePhoto(this.profile.id, currentCapturedThumbnail);
+          if (res.success) {
+            this.profile.photoUrl = currentCapturedThumbnail;
+
+            // Instant UI update across all portal components
+            if (avatarPreviewContainer) {
+              avatarPreviewContainer.innerHTML = renderStudentThumbnail(this.profile, { size: 58 });
+            }
+            const topbarAvatar = this.container.querySelector('#btn-open-profile-menu');
+            if (topbarAvatar) {
+              topbarAvatar.innerHTML = renderStudentThumbnail(this.profile, { size: 38 });
+            }
+            const drawerAvatarWrap = this.container.querySelector('.drawer-profile-row .student-thumb-wrapper');
+            if (drawerAvatarWrap) {
+              drawerAvatarWrap.outerHTML = renderStudentThumbnail(this.profile, { size: 46 });
+            }
+
+            if (feedbackBox) {
+              feedbackBox.className = 'profile-feedback-box success';
+              feedbackBox.textContent = '✅ Profile photo updated successfully!';
+              feedbackBox.style.display = 'block';
+            }
+            stopPhotoCapture();
+          } else {
+            alert(res.message || 'Failed to update photo');
+          }
+        } catch (err) {
+          console.error('Save photo error:', err);
+        } finally {
+          savePhotoBtn.disabled = false;
+          savePhotoBtn.textContent = '✅ Save Thumbnail';
+        }
       });
     }
 
@@ -490,9 +659,13 @@ export class StudentDashboardApp {
         closeDrawer();
         drawerRefreshBtn.style.opacity = '0.5';
         try {
-          this.profile = await StudentService.getProfile();
+          const [freshProfile, freshHistory] = await Promise.all([
+            StudentService.getProfile(),
+            StudentService.getAttendanceHistory(this.profile?.id)
+          ]);
+          this.profile = freshProfile;
+          this.historyList = freshHistory;
           this.currentLecture = await StudentService.getCurrentLecture(this.profile?.sectionId, this.profile?.sectionName, this.profile?.semester);
-          this.historyList = await StudentService.getAttendanceHistory(this.profile?.id);
         } finally {
           await this.render();
         }
@@ -527,7 +700,59 @@ export class StudentDashboardApp {
       });
     }
 
-    // 5. Scan QR from Image file fallback
+    // 5. Camera Zoom Line & Button Controls (+ / - / slider / presets)
+    const zoomSlider = this.container.querySelector('#scanner-zoom-slider');
+    const zoomBadge = this.container.querySelector('#zoom-badge-text');
+    const zoomInBtn = this.container.querySelector('#btn-zoom-in');
+    const zoomOutBtn = this.container.querySelector('#btn-zoom-out');
+    const zoomPresetBtns = this.container.querySelectorAll('.btn-zoom-preset');
+
+    const setZoom = (val) => {
+      const zoomNum = Math.max(1.0, Math.min(4.0, Number(val) || 1.0));
+      const formatted = zoomNum.toFixed(1);
+      if (zoomSlider) zoomSlider.value = formatted;
+      if (zoomBadge) zoomBadge.textContent = `${formatted}x`;
+
+      zoomPresetBtns.forEach(btn => {
+        const pZoom = Number(btn.getAttribute('data-zoom'));
+        if (Math.abs(pZoom - zoomNum) < 0.1) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+
+      if (this.qrScanner) {
+        this.qrScanner.applyZoom(zoomNum);
+      }
+    };
+
+    if (zoomSlider) {
+      zoomSlider.addEventListener('input', (e) => setZoom(e.target.value));
+    }
+
+    if (zoomInBtn) {
+      zoomInBtn.addEventListener('click', () => {
+        const current = zoomSlider ? Number(zoomSlider.value) : 1.0;
+        setZoom(current + 0.5);
+      });
+    }
+
+    if (zoomOutBtn) {
+      zoomOutBtn.addEventListener('click', () => {
+        const current = zoomSlider ? Number(zoomSlider.value) : 1.0;
+        setZoom(current - 0.5);
+      });
+    }
+
+    zoomPresetBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const pZoom = btn.getAttribute('data-zoom');
+        if (pZoom) setZoom(pZoom);
+      });
+    });
+
+    // 6. Scan QR from Image file fallback
     if (fileQrInput) {
       fileQrInput.addEventListener('change', async (e) => {
         const file = e.target.files?.[0];
@@ -535,11 +760,15 @@ export class StudentDashboardApp {
 
         try {
           const { Html5Qrcode } = await import('html5-qrcode');
+          const { playScanBeep } = await import('../../utils/audioUtils.js');
           const scannerEl = this.container.querySelector('#camera-stream-viewport');
           if (scannerEl) {
             const html5Qr = new Html5Qrcode('camera-stream-viewport');
             const decodedText = await html5Qr.scanFile(file, true);
             
+            // Audio & Haptic Feedback on successful QR detection
+            playScanBeep();
+
             if (scannerModal) scannerModal.classList.remove('active');
             this.stopCameraStream();
 
@@ -601,7 +830,13 @@ export class StudentDashboardApp {
           });
         }
       });
-      this.qrScanner.start().catch(err => {
+      this.qrScanner.start().then(() => {
+        // Reset zoom slider to 1.0x on camera start
+        const zoomSlider = this.container.querySelector('#scanner-zoom-slider');
+        const zoomBadge = this.container.querySelector('#zoom-badge-text');
+        if (zoomSlider) zoomSlider.value = '1.0';
+        if (zoomBadge) zoomBadge.textContent = '1.0x';
+      }).catch(err => {
         console.warn('Camera access unavailable (try using "Scan from Image" button):', err);
         const statusText = this.container.querySelector('#scanner-status-text');
         if (statusText) {

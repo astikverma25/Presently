@@ -340,6 +340,26 @@ body.admin-body {
   display: inline-block;
 }
 
+.admin-table tbody tr.assignment-row-completed {
+  background: #F8FAFC !important;
+}
+
+.admin-table tbody tr.assignment-row-completed td {
+  color: #64748B;
+}
+
+.admin-table tbody tr.assignment-row-completed:hover {
+  background: #F1F5F9 !important;
+}
+
+.admin-table tbody tr.assignment-row-live {
+  background: #F0FDF4 !important;
+}
+
+.admin-table tbody tr.assignment-row-live:hover {
+  background: #DCFCE7 !important;
+}
+
 /* Placeholder Overview View */
 .overview-empty-card {
   background: #FFFFFF;

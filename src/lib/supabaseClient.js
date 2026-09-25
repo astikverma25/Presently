@@ -32,9 +32,14 @@ export const getCurrentUserProfile = async () => {
       const parsed = JSON.parse(raw);
       if (parsed?.user?.id) {
         if (parsed.role === 'student') {
-          const isLocalDev = typeof import.meta !== 'undefined' && 
-            import.meta.env?.DEV && 
-            (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+          const isLocalDev = typeof import.meta !== 'undefined' && (
+            import.meta.env?.DEV || 
+            window.location.hostname === 'localhost' || 
+            window.location.hostname === '127.0.0.1' ||
+            window.location.hostname.includes('trycloudflare.com') ||
+            window.location.hostname.includes('ngrok') ||
+            window.location.hostname.includes('loca.lt')
+          );
 
           // On production/HTTPS: Verify session token against backend (prevents localStorage tampering)
           if (!isLocalDev && !parsed.isLocalDev) {

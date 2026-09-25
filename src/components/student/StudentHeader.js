@@ -1,11 +1,9 @@
+import { renderStudentThumbnail } from '../../utils/avatarUtils.js';
+
 /**
  * Top App Bar & Segmented Navigation Component for Student Portal
  */
 export const renderStudentHeader = (profile, currentTab = 'overview', isLive = false, historyCount = 0) => {
-  const initials = profile?.name 
-    ? profile.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() 
-    : 'ST';
-
   return `
     <!-- 1. Top Navbar -->
     <header class="student-topbar">
@@ -26,10 +24,8 @@ export const renderStudentHeader = (profile, currentTab = 'overview', isLive = f
       </div>
 
       <div class="topbar-right">
-        <button type="button" class="student-avatar-btn" id="btn-open-profile-menu" title="${profile?.name || 'Student Profile'}" aria-label="Open profile menu">
-          <div class="student-avatar-circle">
-            ${initials}
-          </div>
+        <button type="button" class="student-avatar-btn" id="btn-open-profile-menu" title="${profile?.name || 'Student Profile'}" aria-label="Open profile menu" style="padding: 0; background: none; border: none;">
+          ${renderStudentThumbnail(profile || {}, { size: 38 })}
         </button>
       </div>
     </header>
