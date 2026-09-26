@@ -29,6 +29,7 @@ export const mockCurrentLecture = {
 export const mockStudentHistory = [
   {
     id: 'rec-1',
+    lecId: 'LEC-20260921-01',
     date: '21 Sep 2026',
     time: '10:04 AM',
     subjectName: 'Data Structures',
@@ -39,6 +40,7 @@ export const mockStudentHistory = [
   },
   {
     id: 'rec-2',
+    lecId: 'LEC-20260920-02',
     date: '20 Sep 2026',
     time: '12:05 PM',
     subjectName: 'Operating Systems',
@@ -49,6 +51,7 @@ export const mockStudentHistory = [
   },
   {
     id: 'rec-3',
+    lecId: 'LEC-20260919-01',
     date: '19 Sep 2026',
     time: '02:02 PM',
     subjectName: 'DBMS Lab',
@@ -59,6 +62,7 @@ export const mockStudentHistory = [
   },
   {
     id: 'rec-4',
+    lecId: 'LEC-20260918-03',
     date: '18 Sep 2026',
     time: '—',
     subjectName: 'Computer Networks',
@@ -69,6 +73,7 @@ export const mockStudentHistory = [
   },
   {
     id: 'rec-5',
+    lecId: 'LEC-20260917-01',
     date: '17 Sep 2026',
     time: '10:03 AM',
     subjectName: 'Data Structures',

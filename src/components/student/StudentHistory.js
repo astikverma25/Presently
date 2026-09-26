@@ -32,17 +32,22 @@ export const renderStudentHistory = (historyList = [], selectedDate = getLocalDa
   } else {
     contentHTML = `
       <div style="display: flex; flex-direction: column; gap: 10px;">
-        ${filteredList.map(item => `
+        ${filteredList.map(item => {
+          const lecId = item.lecId || item.lec_id || '';
+          return `
           <div class="history-item-card">
             <div class="history-left-info">
               <h4>${item.subjectName}</h4>
               <p>${item.date} • ${item.time !== '—' ? item.time : 'No Scan Record'}</p>
             </div>
-            <span class="history-status-badge ${item.status}">
-              ${item.status === 'present' ? '● Present' : 'Absent'}
-            </span>
+            <div class="history-right-info">
+              ${lecId ? `<span class="history-lec-id">${lecId}</span>` : ''}
+              <span class="history-status-badge ${item.status}">
+                ${item.status === 'present' ? '● Present' : 'Absent'}
+              </span>
+            </div>
           </div>
-        `).join('')}
+        `;}).join('')}
       </div>
     `;
   }

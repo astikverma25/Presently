@@ -17,17 +17,22 @@ export const renderStudentOverview = (profile, currentLecture, historyList = [])
     return false;
   });
 
-  const recentItemsHTML = todayRecords.map(item => `
+  const recentItemsHTML = todayRecords.map(item => {
+    const lecId = item.lecId || item.lec_id || '';
+    return `
     <div class="history-item-card" style="margin-bottom: 8px;">
       <div class="history-left-info">
         <h4>${item.subjectName}</h4>
         <p>Today • ${item.time !== '—' ? item.time : 'Scanned'}</p>
       </div>
-      <span class="history-status-badge ${item.status}">
-        ${item.status === 'present' ? '● Present' : 'Absent'}
-      </span>
+      <div class="history-right-info">
+        ${lecId ? `<span class="history-lec-id">${lecId}</span>` : ''}
+        <span class="history-status-badge ${item.status}">
+          ${item.status === 'present' ? '● Present' : 'Absent'}
+        </span>
+      </div>
     </div>
-  `).join('');
+  `;}).join('');
 
   // Format faculty name directly with 'Prof.' prefix (without 'Faculty:' label)
   let facultyDisplay = '';

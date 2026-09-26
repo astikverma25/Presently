@@ -806,6 +806,26 @@ body.student-body {
   color: #64748B;
 }
 
+.history-right-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.history-lec-id {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #64748B;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+}
+
 .history-status-badge {
   font-size: 0.78rem;
   font-weight: 700;

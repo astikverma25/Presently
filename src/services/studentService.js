@@ -541,6 +541,7 @@ export class StudentService {
 
           return {
             id: r.id,
+            lecId: r.lec_id || fa?.lec_id || null,
             date: dateStr,
             time: timeStr,
             rawDate: rawDate,
