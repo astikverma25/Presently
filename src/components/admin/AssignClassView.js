@@ -14,23 +14,21 @@ export const renderAssignClassView = (assignments = [], subjects = [], sections 
     const endTime = (a.end_time || a.endTime || '23:59:00').slice(0, 5);
     const status = (a.status || '').toLowerCase();
 
-    const isExplicitCompleted = status === 'completed';
-    const isOngoing = status === 'ongoing';
+    const isFutureDate = !!(lecDate && lecDate > todayIST);
     const isPastDate = !!(lecDate && lecDate < todayIST);
-    const isPastTimeToday = (lecDate === todayIST) && (endTime < currentTimeIST);
     const isCurrentTimeSlotToday = (lecDate === todayIST) && (startTime <= currentTimeIST && endTime >= currentTimeIST);
     const isUpcomingTimeToday = (lecDate === todayIST) && (startTime > currentTimeIST);
-    const isFutureDate = !!(lecDate && lecDate > todayIST);
 
-    const isCompleted = isExplicitCompleted || isPastDate || isPastTimeToday;
-    const isLive = !isCompleted && (isOngoing || isCurrentTimeSlotToday);
+    // Strictly past dates (lecDate < today) are considered completed/greyed
+    const isCompleted = isPastDate;
+    const isLive = (lecDate === todayIST) && (status === 'ongoing' || isCurrentTimeSlotToday);
 
-    let rank = 4; // Completed
+    let rank = 4; // Past dates (Completed)
     if (isLive) {
       rank = 1; // Live / In Progress
-    } else if (isUpcomingTimeToday && !isCompleted) {
-      rank = 2; // Upcoming Today
-    } else if (isFutureDate && !isCompleted) {
+    } else if (lecDate === todayIST) {
+      rank = 2; // Today
+    } else if (isFutureDate) {
       rank = 3; // Upcoming Next Days
     }
 
@@ -46,7 +44,7 @@ export const renderAssignClassView = (assignments = [], subjects = [], sections 
     };
   };
 
-  // Sort assignments: Top Live (1) -> Upcoming Today (2) -> Upcoming Next Days (3) -> Completed (4)
+  // Sort assignments: Top Live (1) -> Today (2) -> Upcoming Next Days (3) -> Past/Completed (4)
   const sortedAssignments = [...assignments].sort((a, b) => {
     const stA = getAssignmentStatus(a);
     const stB = getAssignmentStatus(b);
@@ -55,7 +53,7 @@ export const renderAssignClassView = (assignments = [], subjects = [], sections 
       return stA.rank - stB.rank;
     }
 
-    // Within completed (rank 4): most recent completed first (date descending, time descending)
+    // Within past/completed (rank 4): most recent completed first (date descending, time descending)
     if (stA.rank === 4) {
       if (stA.lecDate !== stB.lecDate) {
         return stB.lecDate.localeCompare(stA.lecDate);
@@ -114,25 +112,24 @@ export const renderAssignClassView = (assignments = [], subjects = [], sections 
         const timeDisplay = start && end ? `${start.slice(0, 5)} - ${end.slice(0, 5)}` : (start || '—');
         const room = a.room_no || a.roomNo || '—';
 
+        // Only past dates (lecDate < today) are greyed out
         const rowClass = isCompleted ? 'assignment-table-row assignment-row-completed' : (isLive ? 'assignment-table-row assignment-row-live' : 'assignment-table-row');
-        const rowStyle = isCompleted ? 'background: #F8FAFC; color: #64748B;' : '';
+        const rowStyle = isCompleted ? 'background: #F1F5F9; color: #64748B;' : '';
 
         // Status badge / Room badge
-        let roomBadgeHTML = `<span class="badge-status-active">${room}</span>`;
-        if (isCompleted) {
-          roomBadgeHTML = `<span style="background: #F1F5F9; color: #64748B; font-size: 0.76rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; border: 1px solid #E2E8F0;">${room}</span>`;
-        } else if (isLive) {
-          roomBadgeHTML = `<span style="background: #DCFCE7; color: #15803D; font-size: 0.78rem; font-weight: 800; padding: 3px 10px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 4px;">● ${room}</span>`;
-        }
+        const roomBadgeHTML = isLive 
+          ? `<span style="background: #DCFCE7; color: #15803D; font-size: 0.78rem; font-weight: 800; padding: 3px 10px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 4px;">● ${room}</span>`
+          : `<span class="badge-status-active">${room}</span>`;
 
-        // Timing display with Live tag if currently running
+        // Timing display
         const timingHTML = isLive
           ? `<strong style="color: #15803D;">${timeDisplay}</strong> <span style="background: #DCFCE7; color: #15803D; font-size: 0.72rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-left: 4px; display: inline-block;">● Live</span>`
-          : (isCompleted ? `<span style="color: #64748B;">${timeDisplay}</span>` : `<strong>${timeDisplay}</strong>`);
+          : `<strong>${timeDisplay}</strong>`;
 
-        // Actions column: hide Edit and Delete for completed lectures
+        // Actions column: hide Edit and Delete strictly when lecture date is past (lec_date < today)
+        const isPastDate = !!(rawDate && rawDate < todayIST);
         let actionsHTML = '';
-        if (isCompleted) {
+        if (isPastDate) {
           actionsHTML = `
             <span style="display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; font-size: 0.78rem; font-weight: 700; border-radius: 6px; background: #F1F5F9; color: #64748B; border: 1px solid #E2E8F0;">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>

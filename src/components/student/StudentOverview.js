@@ -19,17 +19,26 @@ export const renderStudentOverview = (profile, currentLecture, historyList = [])
 
   const recentItemsHTML = todayRecords.map(item => {
     const lecId = item.lecId || item.lec_id || '';
+    const lecDate = item.lecDate || item.date || item.rawDate || 'Today';
+    const hasScanTime = item.time && item.time !== '—';
+    const scanTimeDisplay = hasScanTime 
+      ? item.time 
+      : (item.status === 'present' ? 'Scanned' : 'No Scan Record');
+
     return `
     <div class="history-item-card" style="margin-bottom: 8px;">
       <div class="history-left-info">
         <h4>${item.subjectName}</h4>
-        <p>Today • ${item.time !== '—' ? item.time : 'Scanned'}</p>
+        <div class="history-lec-meta-col">
+          ${lecId ? `<span class="history-lec-id-inline">${lecId}</span>` : ''}
+          <span class="history-lec-date-sub">${lecDate}</span>
+        </div>
       </div>
       <div class="history-right-info">
-        ${lecId ? `<span class="history-lec-id">${lecId}</span>` : ''}
         <span class="history-status-badge ${item.status}">
           ${item.status === 'present' ? '● Present' : 'Absent'}
         </span>
+        <span class="history-scan-subtext">${scanTimeDisplay}</span>
       </div>
     </div>
   `;}).join('');

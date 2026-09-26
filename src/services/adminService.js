@@ -388,7 +388,9 @@ export class AdminService {
     if (updateData.subjectId) payload.subject_id = updateData.subjectId;
     if (updateData.sectionId) payload.section_id = updateData.sectionId;
     if (updateData.lecDate) payload.lec_date = updateData.lecDate;
-    if (updateData.status) payload.status = updateData.status;
+    
+    // When updating any lecture, set status to scheduled simply
+    payload.status = updateData.status || 'scheduled';
 
     const { data, error } = await supabase
       .from('faculty_assignment')

@@ -539,9 +539,13 @@ export class StudentService {
             ? new Date(r.marked_at).getTime() 
             : (rawDate ? new Date(`${rawDate}T${fa?.start_time || '00:00:00'}`).getTime() : 0);
 
+          const rawLecDate = r.lecture_date || fa?.lec_date || rawDate;
+          const lecDateStr = formatIndianDate(rawLecDate, true);
+
           return {
             id: r.id,
             lecId: r.lec_id || fa?.lec_id || null,
+            lecDate: lecDateStr,
             date: dateStr,
             time: timeStr,
             rawDate: rawDate,

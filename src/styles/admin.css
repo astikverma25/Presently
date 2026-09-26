@@ -341,15 +341,30 @@ body.admin-body {
 }
 
 .admin-table tbody tr.assignment-row-completed {
-  background: #F8FAFC !important;
+  background: #F1F5F9 !important;
 }
 
 .admin-table tbody tr.assignment-row-completed td {
   color: #64748B;
 }
 
+.admin-table tbody tr.assignment-row-completed td strong {
+  color: #475569;
+}
+
+.admin-table tbody tr.assignment-row-completed td code {
+  background: #E2E8F0;
+  color: #475569;
+}
+
+.admin-table tbody tr.assignment-row-completed td .badge-tag,
+.admin-table tbody tr.assignment-row-completed td .badge-status-active {
+  background: #E2E8F0;
+  color: #64748B;
+}
+
 .admin-table tbody tr.assignment-row-completed:hover {
-  background: #F1F5F9 !important;
+  background: #E2E8F0 !important;
 }
 
 .admin-table tbody tr.assignment-row-live {

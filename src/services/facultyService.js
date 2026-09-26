@@ -615,44 +615,7 @@ export class FacultyService {
    * 5. Get Real Recent Activities from attendance_sessions
    */
   static async getRecentActivities() {
-    try {
-      const { data: sessions } = await supabase
-        .from('attendance_sessions')
-        .select(`
-          id,
-          status,
-          started_at,
-          ended_at,
-          faculty_assignment:faculty_assignment_id (
-            room_no,
-            subject:subject_id (subject_name),
-            section:section_id (section_name)
-          )
-        `)
-        .order('started_at', { ascending: false })
-        .limit(5);
-
-      if (!sessions || !sessions.length) {
-        return [];
-      }
-
-      return sessions.map(s => {
-        const fa = s.faculty_assignment;
-        const subject = fa?.subject?.subject_name || 'Lecture';
-        const section = fa?.section?.section_name || '';
-        const isCompleted = s.status === 'completed';
-        const timeAgo = s.started_at ? new Date(s.started_at).toLocaleDateString() : 'Today';
-
-        return {
-          title: isCompleted ? `QR session closed for ${subject} - Sec ${section}` : `Active QR session in ${subject} - Sec ${section}`,
-          time: timeAgo,
-          type: isCompleted ? 'completed' : 'active'
-        };
-      });
-    } catch (err) {
-      console.error('getRecentActivities error:', err);
-      return [];
-    }
+    return [];
   }
 
   /**

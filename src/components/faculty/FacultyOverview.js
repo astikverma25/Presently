@@ -47,25 +47,12 @@ export const renderFacultyOverview = async (
       </div>
     `;
 
-  const activitiesHTML = activities.length > 0
-    ? activities.map(act => `
-        <div class="activity-item">
-          <div class="activity-icon-badge">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          </div>
-          <div class="activity-text">
-            <strong>${act.title}</strong> <span class="activity-time">• ${act.time}</span>
-          </div>
-        </div>
-      `).join('')
-    : `
-      <div style="color: #64748B; font-size: 0.88rem; display: flex; align-items: center; gap: 8px;">
-        <div style="width: 8px; height: 8px; border-radius: 50%; background: #94A3B8;"></div>
-        <span>No recent session activity recorded. Completed QR sessions will appear here.</span>
-      </div>
-    `;
+  const activitiesHTML = `
+    <div style="color: #64748B; font-size: 0.88rem; display: flex; align-items: center; gap: 8px;">
+      <div style="width: 8px; height: 8px; border-radius: 50%; background: #94A3B8;"></div>
+      <span>No recent activity</span>
+    </div>
+  `;
 
   return `
     <div class="content-header-row">

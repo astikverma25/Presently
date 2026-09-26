@@ -34,17 +34,28 @@ export const renderStudentHistory = (historyList = [], selectedDate = getLocalDa
       <div style="display: flex; flex-direction: column; gap: 10px;">
         ${filteredList.map(item => {
           const lecId = item.lecId || item.lec_id || '';
+          const lecDate = item.lecDate || item.date || item.rawDate || '';
+          
+          // Format scan time only for right side
+          const hasScanTime = item.time && item.time !== '—';
+          const scanTimeDisplay = hasScanTime 
+            ? item.time 
+            : (item.status === 'present' ? 'Scanned' : 'No Scan Record');
+
           return `
           <div class="history-item-card">
             <div class="history-left-info">
               <h4>${item.subjectName}</h4>
-              <p>${item.date} • ${item.time !== '—' ? item.time : 'No Scan Record'}</p>
+              <div class="history-lec-meta-col">
+                ${lecId ? `<span class="history-lec-id-inline">${lecId}</span>` : ''}
+                <span class="history-lec-date-sub">${lecDate}</span>
+              </div>
             </div>
             <div class="history-right-info">
-              ${lecId ? `<span class="history-lec-id">${lecId}</span>` : ''}
               <span class="history-status-badge ${item.status}">
                 ${item.status === 'present' ? '● Present' : 'Absent'}
               </span>
+              <span class="history-scan-subtext">${scanTimeDisplay}</span>
             </div>
           </div>
         `;}).join('')}
