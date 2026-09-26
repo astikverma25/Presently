@@ -50,10 +50,11 @@ export function triggerHapticFeedback(type = 'success') {
   } catch (e) {}
 }
 
-export function showScanFeedbackModal({ success, isDuplicate, isWrongSection, title, message, subDetail, onDismiss }) {
-  const isWarn = isDuplicate || (!success && title?.toLowerCase().includes('already'));
-  const isSecMismatch = isWrongSection || (!success && title?.toLowerCase().includes('section'));
-  const feedbackType = success ? 'success' : (isWarn ? 'warning' : 'error');
+export function showScanFeedbackModal({ success, isDuplicate, isAlreadyMarked, isWrongSection, title, message, subDetail, onDismiss }) {
+  const isWarn = Boolean(isDuplicate || isAlreadyMarked || title?.toLowerCase().includes('already') || message?.toLowerCase().includes('already'));
+  const isSecMismatch = Boolean(isWrongSection || title?.toLowerCase().includes('section') || message?.toLowerCase().includes('section'));
+  const isOk = Boolean(success && !isWarn && !isSecMismatch);
+  const feedbackType = isOk ? 'success' : (isSecMismatch ? 'error' : (isWarn ? 'warning' : 'error'));
 
   // Trigger Sound & Vibration
   playAudioFeedback(feedbackType === 'success' ? 'success' : (feedbackType === 'warning' ? 'success' : 'error'));
@@ -68,7 +69,7 @@ export function showScanFeedbackModal({ success, isDuplicate, isWrongSection, ti
   overlay.className = 'scan-feedback-backdrop';
 
   let iconHTML = '';
-  if (success) {
+  if (isOk) {
     iconHTML = `
       <div class="feedback-icon-circle success">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -106,17 +107,17 @@ export function showScanFeedbackModal({ success, isDuplicate, isWrongSection, ti
     `;
   }
 
-  const cardClass = success 
+  const cardClass = isOk 
     ? 'feedback-card-success' 
     : (isWarn ? 'feedback-card-warning' : 'feedback-card-error');
 
-  const btnClass = success 
+  const btnClass = isOk 
     ? 'btn-success' 
     : (isWarn ? 'btn-warning' : 'btn-retry');
 
-  const defaultTitle = success 
+  const defaultTitle = isOk 
     ? 'Attendance Verified!' 
-    : (isSecMismatch ? 'Wrong Section / Unauthorized' : (isWarn ? 'Already Recorded' : 'Verification Failed'));
+    : (isSecMismatch ? 'Wrong Section / Unauthorized' : (isWarn ? 'Attendance Already Recorded' : 'Verification Failed'));
 
   overlay.innerHTML = `
     <div class="scan-feedback-card ${cardClass}">
@@ -126,7 +127,7 @@ export function showScanFeedbackModal({ success, isDuplicate, isWrongSection, ti
       ${subDetail ? `<div class="feedback-sub-pill">${subDetail}</div>` : ''}
 
       <button type="button" class="btn-feedback-action ${btnClass}" id="btn-feedback-done">
-        ${success ? 'Done & Return to Dashboard' : (isWarn ? 'Got It' : 'Dismiss / Try Again')}
+        ${isOk ? 'Done & Return to Dashboard' : (isWarn ? 'Got It' : 'Dismiss / Try Again')}
       </button>
     </div>
   `;

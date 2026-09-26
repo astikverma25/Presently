@@ -52,7 +52,7 @@ export const getIndianTimeVal = (dateInput = new Date()) => {
   try {
     const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
     const validDate = isNaN(d.getTime()) ? new Date() : d;
-    
+
     return new Intl.DateTimeFormat('en-GB', {
       timeZone: INDIAN_TIMEZONE,
       hour: '2-digit',

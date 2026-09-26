@@ -18,7 +18,22 @@ export const renderStudentHeader = (profile, currentTab = 'overview', isLive = f
         </button>
 
         <div class="student-brand-badge">
-          <span class="student-brand-logo">Presently</span>
+          <span class="student-brand-logo" style="display: flex; align-items: center; gap: 7px;">
+            <svg viewBox="0 0 32 32" width="22" height="22" style="border-radius: 6px; flex-shrink: 0;" aria-hidden="true">
+              <defs>
+                <linearGradient id="studentLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#4F46E5"/>
+                  <stop offset="100%" stop-color="#3730A3"/>
+                </linearGradient>
+              </defs>
+              <rect width="32" height="32" rx="8" fill="url(#studentLogoGrad)"/>
+              <rect x="6" y="6" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+              <rect x="18" y="6" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+              <rect x="6" y="18" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+              <circle cx="22" cy="22" r="3" fill="#10B981"/>
+            </svg>
+            Presently
+          </span>
           <span class="student-portal-tag">Student</span>
         </div>
       </div>

@@ -1,7 +1,12 @@
 /**
  * Topbar Component for Faculty Dashboard
  */
-export const renderFacultyTopbar = (profile) => `
+export const renderFacultyTopbar = (profile) => {
+  const rawName = profile?.name || 'Vishal Gupta';
+  const greetingName = rawName.startsWith('Hi,') ? rawName : `Hi, ${rawName}`;
+  const initials = profile?.avatarInitials || (rawName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'VG');
+
+  return `
   <header class="dashboard-topbar">
     <div class="search-box-wrapper">
       <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -20,12 +25,13 @@ export const renderFacultyTopbar = (profile) => `
       </button>
 
       <div class="user-profile-badge">
-        <div class="profile-avatar-circle">${profile?.avatarInitials || 'FM'}</div>
+        <div class="profile-avatar-circle">${initials}</div>
         <div class="profile-info">
-          <span class="profile-name">${profile?.name || 'Faculty Member'}</span>
+          <span class="profile-name">${greetingName}</span>
           <span class="profile-role">${profile?.role || 'Faculty'}</span>
         </div>
       </div>
     </div>
   </header>
 `;
+};

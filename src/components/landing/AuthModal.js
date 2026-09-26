@@ -12,7 +12,22 @@ export const initAuthModal = () => {
         <!-- Standard Login View -->
         <div id="auth-main-view">
           <div style="text-align: center; margin-bottom: 20px;">
-            <div style="font-size: 1.6rem; font-weight: 800; font-style: italic; color: #4338CA; margin-bottom: 4px;">Presently</div>
+            <div style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 1.6rem; font-weight: 800; font-style: italic; color: #4338CA; margin-bottom: 6px;">
+              <svg viewBox="0 0 32 32" width="28" height="28" style="border-radius: 7px; flex-shrink: 0;" aria-hidden="true">
+                <defs>
+                  <linearGradient id="authLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#4F46E5"/>
+                    <stop offset="100%" stop-color="#3730A3"/>
+                  </linearGradient>
+                </defs>
+                <rect width="32" height="32" rx="8" fill="url(#authLogoGrad)"/>
+                <rect x="6" y="6" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+                <rect x="18" y="6" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+                <rect x="6" y="18" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+                <circle cx="22" cy="22" r="3" fill="#10B981"/>
+              </svg>
+              <span>Presently</span>
+            </div>
             <h3 style="font-size: 1.35rem; color: #0F172A; margin-bottom: 4px;">Sign in to your account</h3>
             <p style="font-size: 0.88rem; color: #64748B;">Select your institutional role to continue</p>
           </div>

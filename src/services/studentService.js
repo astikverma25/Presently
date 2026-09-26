@@ -519,8 +519,12 @@ export class StudentService {
           const sub = fa?.subject;
           const sec = fa?.section;
 
-          const rawDate = r.lecture_date || fa?.lec_date || (r.marked_at ? r.marked_at.slice(0, 10) : getIndianDateString());
-          const dateStr = formatIndianDate(rawDate, true);
+          // Filter key uses lec_date (lecture_date)
+          const rawDate = r.lecture_date || fa?.lec_date || (r.marked_at ? getIndianDateString(r.marked_at) : getIndianDateString());
+          
+          // Display uses actual marked date and time
+          const displayDate = r.marked_at ? getIndianDateString(r.marked_at) : rawDate;
+          const dateStr = formatIndianDate(displayDate, true);
 
           const timeStr = r.marked_at 
             ? formatIndianTime(r.marked_at) 
@@ -756,6 +760,9 @@ export class StudentService {
         }
 
         if (!rpcErr && rpcData) {
+          if (rpcData.isAlreadyMarked) {
+            rpcData.isDuplicate = true;
+          }
           return rpcData;
         }
       }

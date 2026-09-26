@@ -217,7 +217,7 @@ export class StudentDashboardApp {
       });
 
       // Update Drawer items
-      this.container.querySelectorAll('.drawer-nav-item[data-tab]').forEach(btn => {
+      this.container.querySelectorAll('.drawer-menu-item[data-tab], .drawer-nav-item[data-tab]').forEach(btn => {
         const btnTab = btn.getAttribute('data-tab');
         if (btnTab === newTab) {
           btn.classList.add('active');
@@ -255,22 +255,42 @@ export class StudentDashboardApp {
       });
     });
 
-    this.container.querySelectorAll('.drawer-nav-item[data-tab]').forEach(btn => {
+    this.container.querySelectorAll('.drawer-menu-item[data-tab], .drawer-nav-item[data-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = btn.getAttribute('data-tab');
         switchTab(tab);
       });
     });
 
+    // Drawer Search Filter
+    const drawerSearchInput = this.container.querySelector('#drawer-search-input');
+    if (drawerSearchInput) {
+      drawerSearchInput.addEventListener('input', (e) => {
+        const q = (e.target.value || '').trim().toLowerCase();
+        this.container.querySelectorAll('.drawer-menu-item').forEach(item => {
+          const text = (item.textContent || '').toLowerCase();
+          item.style.display = (!q || text.includes(q)) ? 'flex' : 'none';
+        });
+      });
+    }
+
     // 3. Drawer Quick Actions & Profile Modal
     const drawerProfileBtn = this.container.querySelector('#btn-drawer-profile');
     const drawerScanBtn = this.container.querySelector('#btn-drawer-scan');
     const drawerRefreshBtn = this.container.querySelector('#btn-drawer-refresh');
+    const drawerHelpBtn = this.container.querySelector('#btn-drawer-help');
     const drawerLogoutBtn = this.container.querySelector('#btn-drawer-logout');
     const profileModal = this.container.querySelector('#student-profile-modal');
     const closeProfileModalBtn = this.container.querySelector('#btn-close-profile-modal');
     const cancelProfileEditBtn = this.container.querySelector('#btn-cancel-profile-edit');
     const profileForm = this.container.querySelector('#form-update-student-profile');
+
+    if (drawerHelpBtn) {
+      drawerHelpBtn.addEventListener('click', () => {
+        closeDrawer();
+        alert('Presently Student Support:\n\n• For attendance disputes, contact your subject faculty directly.\n• Maintain >= 75% attendance to remain eligible for exams.\n• For portal issues, contact your institution IT department.');
+      });
+    }
 
     const openProfileModal = () => {
       closeDrawer();
@@ -824,17 +844,22 @@ export class StudentDashboardApp {
             this.historyList = await StudentService.getAttendanceHistory(this.profile?.id);
             await this.render();
 
+            const isAlreadyMarked = Boolean(res.isDuplicate || res.isAlreadyMarked || res.message?.toLowerCase().includes('already'));
+            const isWrongSec = Boolean(res.isWrongSection || res.message?.toLowerCase().includes('section'));
+            const isFreshSuccess = Boolean(res.success && !isAlreadyMarked && !isWrongSec);
+
             showScanFeedbackModal({
-              success: res.success,
-              isDuplicate: res.isDuplicate,
-              isWrongSection: res.isWrongSection,
-              title: res.success 
+              success: isFreshSuccess,
+              isDuplicate: isAlreadyMarked,
+              isAlreadyMarked: isAlreadyMarked,
+              isWrongSection: isWrongSec,
+              title: isFreshSuccess 
                 ? 'Attendance Verified!' 
-                : (res.isWrongSection ? 'Section Mismatch / Unauthorized' : (res.isDuplicate ? 'Already Recorded' : 'Verification Failed')),
+                : (isAlreadyMarked ? 'Attendance Already Marked' : (isWrongSec ? 'Section Mismatch / Unauthorized' : 'Verification Failed')),
               message: res.message,
-              subDetail: res.success 
+              subDetail: isFreshSuccess 
                 ? `Verified from Upload • ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` 
-                : (res.isWrongSection ? `Enrolled: Sec ${res.studentSection || '—'} • Lecture: Sec ${res.lectureSection || '—'}` : (res.isDuplicate ? 'Your attendance is already saved in records.' : 'Please upload a valid active session QR'))
+                : (isAlreadyMarked ? 'Your attendance has already been recorded for this lecture.' : (isWrongSec ? `Enrolled: Sec ${res.studentSection || '—'} • Lecture: Sec ${res.lectureSection || '—'}` : 'Please upload a valid active session QR'))
             });
           }
         } catch (err) {
@@ -862,17 +887,22 @@ export class StudentDashboardApp {
           this.historyList = await StudentService.getAttendanceHistory(this.profile?.id);
           await this.render();
 
+          const isAlreadyMarked = Boolean(res.isDuplicate || res.isAlreadyMarked || res.message?.toLowerCase().includes('already'));
+          const isWrongSec = Boolean(res.isWrongSection || res.message?.toLowerCase().includes('section'));
+          const isFreshSuccess = Boolean(res.success && !isAlreadyMarked && !isWrongSec);
+
           showScanFeedbackModal({
-            success: res.success,
-            isDuplicate: res.isDuplicate,
-            isWrongSection: res.isWrongSection,
-            title: res.success 
+            success: isFreshSuccess,
+            isDuplicate: isAlreadyMarked,
+            isAlreadyMarked: isAlreadyMarked,
+            isWrongSection: isWrongSec,
+            title: isFreshSuccess 
               ? 'Attendance Marked!' 
-              : (res.isWrongSection ? 'Section Mismatch / Unauthorized' : (res.isDuplicate ? 'Already Recorded' : 'Verification Failed')),
+              : (isAlreadyMarked ? 'Attendance Already Marked' : (isWrongSec ? 'Section Mismatch / Unauthorized' : 'Verification Failed')),
             message: res.message,
-            subDetail: res.success 
+            subDetail: isFreshSuccess 
               ? `Dynamic Anti-Proxy Token Verified • ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` 
-              : (res.isWrongSection ? `Enrolled: Sec ${res.studentSection || '—'} • Lecture: Sec ${res.lectureSection || '—'}` : (res.isDuplicate ? 'Your attendance is already saved in institutional records.' : 'Please scan the active live QR on the projector'))
+              : (isAlreadyMarked ? 'Your attendance has already been recorded for this lecture.' : (isWrongSec ? `Enrolled: Sec ${res.studentSection || '—'} • Lecture: Sec ${res.lectureSection || '—'}` : 'Please scan the active live QR on the projector'))
           });
         }
       });

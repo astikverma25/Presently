@@ -4,9 +4,19 @@
 export const renderAdminSidebar = (currentTab = 'add-student') => `
   <aside class="admin-sidebar">
     <div class="admin-sidebar-brand">
-      <div class="admin-brand-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+      <div class="admin-brand-icon" style="background: none; border-radius: 9px; width: 34px; height: 34px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.16); flex-shrink: 0;">
+        <svg viewBox="0 0 32 32" width="34" height="34" style="border-radius: 9px; display: block;" aria-hidden="true">
+          <defs>
+            <linearGradient id="adminLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#4F46E5"/>
+              <stop offset="100%" stop-color="#3730A3"/>
+            </linearGradient>
+          </defs>
+          <rect width="32" height="32" rx="8" fill="url(#adminLogoGrad)"/>
+          <rect x="6" y="6" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+          <rect x="18" y="6" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+          <rect x="6" y="18" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+          <circle cx="22" cy="22" r="3" fill="#10B981"/>
         </svg>
       </div>
       <div>

@@ -4,15 +4,25 @@
 export const renderFacultySidebar = (currentTab = 'overview') => `
   <aside class="dashboard-sidebar">
     <div class="sidebar-brand">
-      <div class="brand-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-          <line x1="16" y1="2" x2="16" y2="6"></line>
-          <line x1="8" y1="2" x2="8" y2="6"></line>
-          <line x1="3" y1="10" x2="21" y2="10"></line>
+      <div class="brand-icon" style="background: none; border-radius: 9px; width: 34px; height: 34px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.16); flex-shrink: 0;">
+        <svg viewBox="0 0 32 32" width="34" height="34" style="border-radius: 9px; display: block;" aria-hidden="true">
+          <defs>
+            <linearGradient id="facultyLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#4F46E5"/>
+              <stop offset="100%" stop-color="#3730A3"/>
+            </linearGradient>
+          </defs>
+          <rect width="32" height="32" rx="8" fill="url(#facultyLogoGrad)"/>
+          <rect x="6" y="6" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+          <rect x="18" y="6" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+          <rect x="6" y="18" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+          <circle cx="22" cy="22" r="3" fill="#10B981"/>
         </svg>
       </div>
-      <span class="brand-title">Presently</span>
+      <div>
+        <span class="brand-title">Presently</span>
+        <span class="admin-badge-tag" style="background: #EEF2FF; color: #4338CA; margin-left: 6px;">Faculty</span>
+      </div>
     </div>
 
     <ul class="sidebar-nav">

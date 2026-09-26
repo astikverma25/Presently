@@ -37,7 +37,39 @@
   letter-spacing: -0.5px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  text-decoration: none;
+  line-height: 1;
+}
+
+.brand-logo-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.16), 0 1px 3px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(79, 70, 229, 0.15);
+  flex-shrink: 0;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.brand-logo:hover .brand-logo-badge {
+  transform: translateY(-1px) scale(1.05);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.24);
+}
+
+.brand-favicon-icon {
+  width: 26px;
+  height: 26px;
+  display: block;
+  border-radius: 6px;
+}
+
+.brand-name-text {
+  display: inline-block;
 }
 
 .nav-links {

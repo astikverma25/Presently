@@ -25,14 +25,30 @@
   <!-- 1. Navigation Bar -->
   <header class="navbar" id="main-header">
     <div class="container nav-container">
-      <a href="#" class="brand-logo">Presently</a>
+      <a href="#" class="brand-logo">
+        <span class="brand-logo-badge">
+          <svg viewBox="0 0 32 32" width="26" height="26" class="brand-favicon-icon" aria-hidden="true">
+            <defs>
+              <linearGradient id="headerLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#4F46E5"/>
+                <stop offset="100%" stop-color="#3730A3"/>
+              </linearGradient>
+            </defs>
+            <rect width="32" height="32" rx="8" fill="url(#headerLogoGrad)"/>
+            <rect x="6" y="6" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+            <rect x="18" y="6" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+            <rect x="6" y="18" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+            <circle cx="22" cy="22" r="3" fill="#10B981"/>
+          </svg>
+        </span>
+        <span class="brand-name-text">Presently</span>
+      </a>
 
       <ul class="nav-links" id="main-nav-links">
         <li><a href="#home" class="active">Home</a></li>
         <li><a href="#about">About</a></li>
         <li><a href="#features">Features</a></li>
         <li><a href="#how-it-works">How It Works</a></li>
-        <li><a href="#testimonials">Testimonials</a></li>
         <li class="mobile-nav-actions-item">
           <div class="mobile-menu-auth-btns">
             <button type="button" class="btn btn-primary btn-mobile-nav-login trigger-login" style="width: 100%;">
@@ -65,9 +81,9 @@
       <div class="container hero-grid">
         <div class="hero-content">
           <h1><span class="text-highlight">Stop Wasting Time</span> on<br>Manual Student Attendance</h1>
-          <p>Track student attendance, reduce manual work, and keep parents updated in real time.</p>
+          <p>Fast QR attendance, live lecture tracking, and one click reports.</p>
           <div class="hero-cta-group">
-            <button type="button" class="btn btn-primary trigger-demo">Book a Free Demo</button>
+            <button type="button" class="btn btn-primary trigger-login">Get Started</button>
             <button type="button" class="btn btn-outline-pill trigger-tutorial">
               <span class="btn-play-icon">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
@@ -124,7 +140,7 @@
       <div class="container">
         <div class="section-header">
           <h2>Still Using <span class="text-highlight">Registers</span> for Attendance?</h2>
-          <p>Manual attendance registers take time, create errors, and make it difficult to track student records accurately. A digital attendance app helps schools save time, reduce paperwork, and manage attendance in real time.</p>
+          <p>Manual attendance registers take time, create errors, and make it difficult to track student records accurately. A digital attendance app helps colleges save time, reduce paperwork, and manage attendance in real time.</p>
         </div>
 
         <div class="pain-cards-grid">
@@ -205,7 +221,7 @@
       <div class="container how-it-works-grid">
         <div class="how-intro">
           <h2>How <span class="text-highlight">Digital Attendance</span> Works?</h2>
-          <p>A simple step-by-step process to mark attendance helps schools save time, reduce errors, and manage student records in real time.</p>
+          <p>A simple step-by-step process to mark attendance helps colleges save time, reduce errors, and manage student records in real time.</p>
           <button type="button" class="btn btn-outline-pill trigger-tutorial">
             <span class="btn-play-icon">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
@@ -245,15 +261,15 @@
             <div class="step-number">04</div>
             <div class="step-info">
               <h3>Admin Views Reports</h3>
-              <p>School admins can track daily attendance, monthly reports, class-wise records & student attendance history.</p>
+              <p>College admins can track daily attendance, monthly reports, class-wise records & student attendance history.</p>
             </div>
           </div>
 
           <div class="step-item">
             <div class="step-number">05</div>
             <div class="step-info">
-              <h3>Parents Get Updates</h3>
-              <p>Parents receive instant updates when their child is absent, late, or attendance status is changed.</p>
+              <h3>Exam Eligibility & Export</h3>
+              <p>Students track their 75% exam criteria in real-time, while faculty and admins export official lecture attendance registers and CSV reports.</p>
             </div>
           </div>
         </div>
@@ -265,7 +281,7 @@
       <div class="container">
         <div class="section-header">
           <h2>Make Attendance <span class="text-highlight">Digital, Simple</span> & Accurate</h2>
-          <p>Make student attendance faster, smarter, and more accurate with a digital attendance app. Teachers can mark attendance in seconds, admins can view real-time reports, and parents can stay updated instantly.</p>
+          <p>Make student attendance faster, smarter, and proxy-proof with a dynamic QR attendance app. Teachers launch sessions in seconds, admins track live analytics, and students monitor their eligibility instantly.</p>
         </div>
 
         <div class="showcase-container">
@@ -277,7 +293,7 @@
             </div>
             <div class="showcase-feature">
               <span class="feature-pill">Real-Time Records</span>
-              <p>Attendance data updates instantly for admins, teachers, and school management.</p>
+              <p>Attendance data updates instantly for admins, teachers, and college management.</p>
             </div>
           </div>
 
@@ -327,51 +343,7 @@
       </div>
     </section>
 
-    <!-- 6. Testimonials Section -->
-    <section class="testimonials-section" id="testimonials">
-      <div class="container testimonials-grid">
-        <div class="testimonials-intro">
-          <h2>Testimonials from <br><span class="text-highlight">our members</span></h2>
-          <p>Real feedback from schools and universities using digital attendance to save time and reduce manual work.</p>
-          <div class="testimonials-controls">
-            <button type="button" class="btn-ctrl" id="btn-prev-testi" aria-label="Previous testimonial">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            </button>
-            <button type="button" class="btn-ctrl active" id="btn-next-testi" aria-label="Next testimonial">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </button>
-          </div>
-        </div>
 
-        <div class="testimonials-cards-wrapper">
-          <div class="testimonial-card" id="testi-card-1">
-            <div class="quote-mark">“</div>
-            <p class="testi-text">"Fast and convenient. My go-to attendance app!"</p>
-            <div class="star-rating">★★★★★</div>
-            <div class="testimonial-author">
-              <div class="author-avatar">AS</div>
-              <div class="author-info">
-                <h4 class="author-name">Aarav Sharma</h4>
-                <span class="author-role">Director, Academic Affairs</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="testimonial-card" id="testi-card-2">
-            <div class="quote-mark">“</div>
-            <p class="testi-text">"Friendly interface and easy student verification process."</p>
-            <div class="star-rating">★★★★★</div>
-            <div class="testimonial-author">
-              <div class="author-avatar">PV</div>
-              <div class="author-info">
-                <h4 class="author-name">Pooja Verma</h4>
-                <span class="author-role">Faculty Head</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
 
     <!-- 7. Bottom Banner CTA -->
     <section class="cta-banner-section">
@@ -379,9 +351,9 @@
       <div class="container">
         <div class="cta-banner-card">
           <h2>Start Smart Attendance Management Today</h2>
-          <p>Save time, reduce manual errors, and keep teachers, admins, and parents connected with a simple digital attendance system.</p>
+          <p>Save time, eliminate proxy attendance, and keep teachers, admins, and students connected with a secure QR attendance platform.</p>
           <div class="cta-banner-actions">
-            <button type="button" class="btn btn-gold trigger-demo">Book a Free Demo</button>
+            <button type="button" class="btn btn-gold trigger-login">Get Started</button>
             <button type="button" class="btn btn-outline-pill trigger-tutorial">
               <span class="btn-play-icon">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
@@ -399,7 +371,24 @@
     <div class="container">
       <div class="footer-top-row">
         <div class="footer-brand-info">
-          <div class="brand-logo" style="margin-bottom: 6px;">Presently</div>
+          <div class="brand-logo" style="margin-bottom: 6px;">
+            <span class="brand-logo-badge">
+              <svg viewBox="0 0 32 32" width="24" height="24" class="brand-favicon-icon" aria-hidden="true">
+                <defs>
+                  <linearGradient id="footerLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#4F46E5"/>
+                    <stop offset="100%" stop-color="#3730A3"/>
+                  </linearGradient>
+                </defs>
+                <rect width="32" height="32" rx="8" fill="url(#footerLogoGrad)"/>
+                <rect x="6" y="6" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+                <rect x="18" y="6" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+                <rect x="6" y="18" width="8" height="8" rx="2" fill="none" stroke="#FFFFFF" stroke-width="2"/>
+                <circle cx="22" cy="22" r="3" fill="#10B981"/>
+              </svg>
+            </span>
+            <span class="brand-name-text">Presently</span>
+          </div>
           <div style="font-size: 0.95rem; font-weight: 600; color: #4338CA;">Attendance, without the paperwork.</div>
         </div>
 

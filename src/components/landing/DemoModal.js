@@ -8,7 +8,7 @@ export const initDemoModal = () => {
         <button class="modal-close" id="close-demo-modal">&times;</button>
         <div style="text-align: center; margin-bottom: 24px;">
           <h3 style="font-size: 1.6rem; color: #0F172A; margin-bottom: 8px;">Book an Institutional Demo</h3>
-          <p style="font-size: 0.92rem; color: #64748B;">Experience Presently customized for your college, school, or university</p>
+          <p style="font-size: 0.92rem; color: #64748B;">Experience Presently customized for your college or university</p>
         </div>
 
         <form id="demo-form" style="display: flex; flex-direction: column; gap: 14px;">
@@ -17,8 +17,8 @@ export const initDemoModal = () => {
             <input type="text" required placeholder="e.g. Prof. Rajesh Sharma / Dr. Pooja Verma" style="width: 100%; padding: 11px 14px; border: 1px solid #CBD5E1; border-radius: 10px; font-size: 0.92rem;">
           </div>
           <div>
-            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #334155;">College / School / Institute Name</label>
-            <input type="text" required placeholder="e.g. LIET / IIT Delhi / Delhi University / DPS" style="width: 100%; padding: 11px 14px; border: 1px solid #CBD5E1; border-radius: 10px; font-size: 0.92rem;">
+            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #334155;">College / University / Institute Name</label>
+            <input type="text" required placeholder="e.g. LIET / IIT Delhi / Delhi University / BITS" style="width: 100%; padding: 11px 14px; border: 1px solid #CBD5E1; border-radius: 10px; font-size: 0.92rem;">
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
             <div>
