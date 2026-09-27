@@ -15,12 +15,17 @@ export class StudentService {
       const user = await getCurrentUserProfile();
 
       if (user && user.role === 'student') {
-        const { data: stdData } = await supabase
-          .from('students')
-          .select('*, sections:section_id(id, section_name, branch, semester)')
-          .eq('id', user.id)
-          .maybeSingle();
-        student = stdData;
+        try {
+          const { data: stdData } = await supabase
+            .from('students')
+            .select('*, sections:section_id(id, section_name, branch, semester)')
+            .eq('id', user.id)
+            .maybeSingle();
+          student = stdData || user;
+        } catch (stdErr) {
+          console.warn('Could not fetch fresh student row, using cached user:', stdErr);
+          student = user;
+        }
       }
 
       // If not authenticated or no student profile found, return null (Strict Auth Guard)

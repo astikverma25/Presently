@@ -1,0 +1,13 @@
+{
+  "appId": "com.presently.attendance",
+  "appName": "Presently",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  }
+}

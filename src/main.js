@@ -1,8 +1,24 @@
 import { initAuthModal } from './components/landing/AuthModal.js';
 import { initDemoModal } from './components/landing/DemoModal.js';
 import { initTutorialModal } from './components/landing/TutorialModal.js';
+import { AuthService } from './services/authService.js';
 
 const initApp = () => {
+  // Auto-redirect if user already has an active authenticated session
+  const activeSession = AuthService.getCurrentSession();
+  if (activeSession && activeSession.user && activeSession.role) {
+    const isNativeApp = typeof window !== 'undefined' && (
+      Boolean(window.AndroidKeystore) || 
+      Boolean(window.Capacitor?.isNativePlatform && window.Capacitor.isNativePlatform())
+    );
+
+    const targetUrl = AuthService.getRedirectUrl(activeSession.role);
+    // In native app or if user isn't deliberately navigating to anchor #about/#features/#how-it-works
+    if (targetUrl && (isNativeApp || !window.location.hash)) {
+      window.location.replace(targetUrl);
+      return;
+    }
+  }
   // Initialize Modals
   const authModal = initAuthModal();
   const demoModal = initDemoModal();

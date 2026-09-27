@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabaseClient.js';
 import { hashPassword } from '../utils/totpCrypto.js';
-import { registerDevicePasskey, verifyDevicePasskey } from '../utils/webAuthnHelper.js';
+import { bindStudentDevice, verifyStudentDevice, isAndroidKeystoreAvailable } from '../utils/deviceSecurityHelper.js';
 
 const STORAGE_KEY = 'presently_auth_session';
 
@@ -59,7 +59,19 @@ export class AuthService {
           }
         }
 
-        const isLocalDev = typeof import.meta !== 'undefined' && (
+        // 1. If running inside Native Android APK with Android Keystore: Direct Automatic Hardware Binding
+        if (isAndroidKeystoreAvailable()) {
+          const isNewDevice = !student.passkey_credential_id;
+          const authRes = await AuthService.completeStudentDeviceAuth(student, isNewDevice, enteredHash);
+          return authRes;
+        }
+
+        const isNativeApp = typeof window !== 'undefined' && (
+          Boolean(window.AndroidKeystore) || 
+          Boolean(window.Capacitor?.isNativePlatform && window.Capacitor.isNativePlatform())
+        );
+
+        const isLocalDev = !isNativeApp && typeof import.meta !== 'undefined' && (
           import.meta.env?.DEV || 
           window.location.hostname === 'localhost' || 
           window.location.hostname === '127.0.0.1' ||
@@ -68,7 +80,7 @@ export class AuthService {
           window.location.hostname.includes('loca.lt')
         );
 
-        // On local dev server / preview tunnel
+        // On local browser dev server / preview tunnel
         if (isLocalDev) {
           const sessionPayload = {
             user: {
@@ -95,7 +107,7 @@ export class AuthService {
           };
         }
 
-        // Production / HTTPS: Return challenge requiring direct user gesture for passkey
+        // Production / HTTPS Web: Return challenge requiring direct user gesture for passkey
         return {
           requiresDevicePrompt: true,
           isNewDevice: !student.passkey_credential_id,
@@ -328,15 +340,15 @@ export class AuthService {
     let verifiedStudent = null;
 
     if (isNewDevice || !student.passkey_credential_id) {
-      // 1. First-Time Passkey Registration (Hardware Security Enclave)
-      const passkeyResult = await registerDevicePasskey({
+      // 1. First-Time Device Key Registration (Android Keystore TEE / StrongBox or WebAuthn)
+      const keyResult = await bindStudentDevice({
         id: student.id,
         roll_no: student.roll_no,
         name: student.name,
-        email: student.personal_email
+        personal_email: student.personal_email
       });
 
-      if (!passkeyResult?.credentialId) {
+      if (!keyResult?.credentialId) {
         throw new Error('Device binding registration was not completed.');
       }
 
@@ -344,9 +356,9 @@ export class AuthService {
       const { data: rpcRes, error: rpcErr } = await supabase.rpc('bind_and_authorize_student_passkey', {
         p_student_id: student.id,
         p_password_hash: enteredPasswordHash,
-        p_passkey_credential_id: passkeyResult.credentialId,
-        p_passkey_public_key: passkeyResult.publicKey,
-        p_device_name: passkeyResult.deviceName
+        p_passkey_credential_id: keyResult.credentialId,
+        p_passkey_public_key: keyResult.publicKey,
+        p_device_name: keyResult.deviceName
       });
 
       if (rpcErr || !rpcRes?.success) {
@@ -357,8 +369,8 @@ export class AuthService {
       sessionToken = rpcRes.session_token;
       verifiedStudent = rpcRes.student;
     } else {
-      // 2. Subsequent Passkey Assertion
-      await verifyDevicePasskey(student.passkey_credential_id, student.device_name);
+      // 2. Subsequent Device Verification / Assertion
+      await verifyStudentDevice(student.passkey_credential_id, student.device_name);
 
       // Secure Server-Side RPC Verification
       const { data: rpcRes, error: rpcErr } = await supabase.rpc('verify_and_authorize_student_login', {
@@ -367,7 +379,7 @@ export class AuthService {
       });
 
       if (rpcErr || !rpcRes?.success) {
-        console.error('Server passkey verification error:', rpcErr || rpcRes);
+        console.error('Server device verification error:', rpcErr || rpcRes);
         throw new Error(rpcRes?.message || rpcErr?.message || 'Access Denied: Could not verify device credentials on server.');
       }
 
@@ -406,7 +418,12 @@ export class AuthService {
     const session = AuthService.getCurrentSession();
     if (!session) return null;
 
-    const isLocalDev = typeof import.meta !== 'undefined' && (
+    const isNativeApp = typeof window !== 'undefined' && (
+      Boolean(window.AndroidKeystore) || 
+      Boolean(window.Capacitor?.isNativePlatform && window.Capacitor.isNativePlatform())
+    );
+
+    const isLocalDev = !isNativeApp && typeof import.meta !== 'undefined' && (
       import.meta.env?.DEV || 
       window.location.hostname === 'localhost' || 
       window.location.hostname === '127.0.0.1' ||
@@ -433,15 +450,16 @@ export class AuthService {
           p_session_token: session.token
         });
 
-        if (error || !verifyRes?.valid) {
-          console.warn('Backend session verification failed:', error || verifyRes?.message);
+        // Only purge if backend explicitly invalidated or rejected the session
+        if (verifyRes && verifyRes.valid === false) {
+          console.warn('Backend session verification failed:', verifyRes.message);
           localStorage.removeItem(STORAGE_KEY);
           return null;
         }
 
         return session;
       } catch (err) {
-        console.warn('Session check network error:', err);
+        console.warn('Session check network error, continuing with cached session:', err);
         return session;
       }
     }

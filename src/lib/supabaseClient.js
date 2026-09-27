@@ -32,7 +32,12 @@ export const getCurrentUserProfile = async () => {
       const parsed = JSON.parse(raw);
       if (parsed?.user?.id) {
         if (parsed.role === 'student') {
-          const isLocalDev = typeof import.meta !== 'undefined' && (
+          const isNativeApp = typeof window !== 'undefined' && (
+            Boolean(window.AndroidKeystore) || 
+            Boolean(window.Capacitor?.isNativePlatform && window.Capacitor.isNativePlatform())
+          );
+
+          const isLocalDev = !isNativeApp && typeof import.meta !== 'undefined' && (
             import.meta.env?.DEV || 
             window.location.hostname === 'localhost' || 
             window.location.hostname === '127.0.0.1' ||
@@ -48,38 +53,56 @@ export const getCurrentUserProfile = async () => {
               return null;
             }
 
-            const { data: verifyRes, error: vErr } = await supabase.rpc('verify_student_session', {
-              p_student_id: parsed.user.id,
-              p_session_token: parsed.token
-            });
+            try {
+              const { data: verifyRes, error: vErr } = await supabase.rpc('verify_student_session', {
+                p_student_id: parsed.user.id,
+                p_session_token: parsed.token
+              });
 
-            if (vErr || !verifyRes?.valid) {
-              console.warn('Backend student session token invalid/tampered:', vErr || verifyRes?.message);
-              localStorage.removeItem('presently_auth_session');
-              return null;
+              // Purge ONLY if backend explicitly invalidated or rejected the session
+              if (verifyRes && verifyRes.valid === false) {
+                console.warn('Backend student session token invalid/revoked:', verifyRes.message);
+                localStorage.removeItem('presently_auth_session');
+                return null;
+              }
+            } catch (netErr) {
+              console.warn('Network issue checking session token with backend:', netErr);
             }
           }
 
-          const { data: std } = await supabase
-            .from('students')
-            .select('*, sections:section_id(id, section_name, branch, semester)')
-            .eq('id', parsed.user.id)
-            .maybeSingle();
+          try {
+            const { data: std } = await supabase
+              .from('students')
+              .select('*, sections:section_id(id, section_name, branch, semester)')
+              .eq('id', parsed.user.id)
+              .maybeSingle();
 
-          if (std) {
-            return {
-              ...std,
-              section_name: std.sections?.section_name || '2A',
-              role: 'student'
-            };
+            if (std) {
+              return {
+                ...std,
+                section_name: std.sections?.section_name || parsed.user.section_name || '2A',
+                role: 'student'
+              };
+            }
+          } catch (fetchErr) {
+            console.warn('Error fetching fresh student profile, using cached session:', fetchErr);
           }
+
+          return { ...parsed.user, role: 'student' };
         } else if (parsed.role === 'staff' || parsed.role === 'faculty') {
-          const { data: fac } = await supabase
-            .from('faculty')
-            .select('*')
-            .or(`id.eq.${parsed.user.id},email.ilike.${parsed.user.email}`)
-            .maybeSingle();
-          if (fac) return { ...fac, role: 'faculty' };
+          try {
+            const { data: fac } = await supabase
+              .from('faculty')
+              .select('*')
+              .or(`id.eq.${parsed.user.id},email.ilike.${parsed.user.email}`)
+              .maybeSingle();
+            if (fac) return { ...fac, role: 'faculty' };
+          } catch (facErr) {
+            console.warn('Error fetching fresh faculty profile, using cached session:', facErr);
+          }
+          return { ...parsed.user, role: 'faculty' };
+        } else if (parsed.role === 'admin') {
+          return { ...parsed.user, role: 'admin' };
         }
         return { ...parsed.user, role: parsed.role };
       }
