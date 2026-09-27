@@ -1,6 +1,6 @@
 import { QRGenerator } from '../../utils/qrGenerator.js';
 import { getLocalDateString } from '../../utils/dateUtils.js';
-import { generateSessionToken, createDynamicQRPayload, validateStrongPassword } from '../../utils/totpCrypto.js';
+import { generateSessionToken, createDynamicQRPayload, validateStrongPassword, uuidToBase64 } from '../../utils/totpCrypto.js';
 import { renderFacultySidebar } from './FacultySidebar.js';
 import { renderFacultyTopbar } from './FacultyTopbar.js';
 import { renderFacultyOverview } from './FacultyOverview.js';
@@ -147,8 +147,8 @@ export class FacultyDashboardApp {
       // Save token state and total expiration (10s visible + 3s grace window) to database
       await QRSessionService.updateSessionToken(sessionId, totalTtlSec, token);
 
-      // Minimalist payload format: <sessionId>:<token>
-      const payloadString = `${sessionId}:${token}`;
+      // Minimalist compact payload format: <compactSessionId>:<token> (22-char Base64URL UUID + 6-char token = 29 bytes)
+      const payloadString = `${uuidToBase64(sessionId)}:${token}`;
       this.currentQrDataUrl = await QRGenerator.generateDataURL(payloadString, 1024);
 
       const qrImg = this.container.querySelector('#qr-img-canvas');

@@ -435,7 +435,7 @@ export class StudentDashboardApp {
         savePhotoBtn.textContent = 'Saving...';
 
         try {
-          const res = await StudentService.updateProfilePhoto(this.profile.id, currentCapturedThumbnail);
+          const res = await StudentService.updateProfilePhoto(this.profile?.id, currentCapturedThumbnail);
           if (res.success) {
             this.profile.photoUrl = currentCapturedThumbnail;
 
@@ -840,13 +840,16 @@ export class StudentDashboardApp {
 
             const res = await StudentService.submitAttendanceScan(decodedText, this.profile?.id);
 
-            this.profile = await StudentService.getProfile();
+            const updatedProfile = await StudentService.getProfile();
+            if (updatedProfile) {
+              this.profile = updatedProfile;
+            }
             this.historyList = await StudentService.getAttendanceHistory(this.profile?.id);
             await this.render();
 
-            const isAlreadyMarked = Boolean(res.isDuplicate || res.isAlreadyMarked || res.message?.toLowerCase().includes('already'));
-            const isWrongSec = Boolean(res.isWrongSection || res.message?.toLowerCase().includes('section'));
-            const isFreshSuccess = Boolean(res.success && !isAlreadyMarked && !isWrongSec);
+            const isAlreadyMarked = Boolean(res?.isDuplicate || res?.isAlreadyMarked || res?.message?.toLowerCase().includes('already'));
+            const isWrongSec = Boolean(res?.isWrongSection || res?.message?.toLowerCase().includes('section'));
+            const isFreshSuccess = Boolean(res?.success && !isAlreadyMarked && !isWrongSec);
 
             showScanFeedbackModal({
               success: isFreshSuccess,
@@ -856,10 +859,10 @@ export class StudentDashboardApp {
               title: isFreshSuccess 
                 ? 'Attendance Verified!' 
                 : (isAlreadyMarked ? 'Attendance Already Marked' : (isWrongSec ? 'Section Mismatch / Unauthorized' : 'Verification Failed')),
-              message: res.message,
+              message: res?.message || 'Attendance scan processed.',
               subDetail: isFreshSuccess 
                 ? `Verified from Upload • ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}` 
-                : (isAlreadyMarked ? 'Your attendance has already been recorded for this lecture.' : (isWrongSec ? `Enrolled: Sec ${res.studentSection || '—'} • Lecture: Sec ${res.lectureSection || '—'}` : 'Please upload a valid active session QR'))
+                : (isAlreadyMarked ? 'Your attendance has already been recorded for this lecture.' : (isWrongSec ? `Enrolled: Sec ${res?.studentSection || '—'} • Lecture: Sec ${res?.lectureSection || '—'}` : 'Please upload a valid active session QR'))
             });
           }
         } catch (err) {
@@ -883,13 +886,16 @@ export class StudentDashboardApp {
 
           const res = await StudentService.submitAttendanceScan(decodedText, this.profile?.id);
           
-          this.profile = await StudentService.getProfile();
+          const updatedProfile = await StudentService.getProfile();
+          if (updatedProfile) {
+            this.profile = updatedProfile;
+          }
           this.historyList = await StudentService.getAttendanceHistory(this.profile?.id);
           await this.render();
 
-          const isAlreadyMarked = Boolean(res.isDuplicate || res.isAlreadyMarked || res.message?.toLowerCase().includes('already'));
-          const isWrongSec = Boolean(res.isWrongSection || res.message?.toLowerCase().includes('section'));
-          const isFreshSuccess = Boolean(res.success && !isAlreadyMarked && !isWrongSec);
+          const isAlreadyMarked = Boolean(res?.isDuplicate || res?.isAlreadyMarked || res?.message?.toLowerCase().includes('already'));
+          const isWrongSec = Boolean(res?.isWrongSection || res?.message?.toLowerCase().includes('section'));
+          const isFreshSuccess = Boolean(res?.success && !isAlreadyMarked && !isWrongSec);
 
           showScanFeedbackModal({
             success: isFreshSuccess,

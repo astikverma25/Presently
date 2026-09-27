@@ -1,5 +1,5 @@
 import { supabase, getCurrentUserProfile } from '../lib/supabaseClient.js';
-import { verifyTotpPayload, hashPassword, validateStrongPassword } from '../utils/totpCrypto.js';
+import { verifyTotpPayload, hashPassword, validateStrongPassword, base64ToUuid } from '../utils/totpCrypto.js';
 import { getIndianDateString, getIndianTimeVal, formatIndianDate, formatIndianTime } from '../utils/dateUtils.js';
 
 /**
@@ -451,7 +451,11 @@ export class StudentService {
   static async getAttendanceHistory(studentId = null) {
     if (!studentId) {
       const profile = await this.getProfile();
-      studentId = profile.id;
+      studentId = profile?.id;
+    }
+
+    if (!studentId) {
+      return [];
     }
 
     try {
@@ -595,9 +599,9 @@ export class StudentService {
         if (!std) {
           const profile = await this.getProfile();
           if (!profile) return { semester: semester || '3rd', totalAttended: 0, totalClasses: 0, overallPercentage: 100, subjects: [] };
-          studentId = profile.id;
-          resolvedSectionId = resolvedSectionId || profile.sectionId;
-          effectiveSem = effectiveSem || profile.semester;
+          studentId = profile?.id;
+          resolvedSectionId = resolvedSectionId || profile?.sectionId;
+          effectiveSem = effectiveSem || profile?.semester;
         } else {
           resolvedSectionId = resolvedSectionId || std.section_id || std.sections?.id;
           effectiveSem = effectiveSem || std.semester || std.sections?.semester;
@@ -720,24 +724,24 @@ export class StudentService {
     let sessionId = null;
     let qrToken = null;
 
-    // 1. Parse payload: Support both compact <sessionId>:<token> and legacy JSON
+    // 1. Parse payload: Support compact <compactSessionId>:<token>, raw UUID, and legacy JSON
     if (typeof scannedPayload === 'string') {
       const trimmed = scannedPayload.trim();
       if (trimmed.includes(':') && !trimmed.startsWith('{')) {
         const parts = trimmed.split(':');
-        sessionId = parts[0];
+        sessionId = base64ToUuid(parts[0]);
         qrToken = parts.slice(1).join(':');
       } else {
         try {
           const parsed = JSON.parse(trimmed);
-          sessionId = parsed.sessionId || parsed.s;
+          sessionId = base64ToUuid(parsed.sessionId || parsed.s);
           qrToken = parsed.sig || parsed.t || parsed.token;
         } catch (e) {
-          sessionId = trimmed;
+          sessionId = base64ToUuid(trimmed);
         }
       }
     } else if (typeof scannedPayload === 'object' && scannedPayload !== null) {
-      sessionId = scannedPayload.sessionId || scannedPayload.s;
+      sessionId = base64ToUuid(scannedPayload.sessionId || scannedPayload.s);
       qrToken = scannedPayload.sig || scannedPayload.t || scannedPayload.token;
     }
 
